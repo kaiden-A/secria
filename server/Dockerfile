@@ -34,6 +34,8 @@ COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --from=builder --chown=app:app /app/app /app/app
 COPY --from=builder --chown=app:app /app/alembic /app/alembic
 COPY --from=builder --chown=app:app /app/alembic.ini /app/alembic.ini
+# Maintenance scripts, e.g. check_db.py, are runnable against a deployed image.
+COPY --from=builder --chown=app:app /app/scripts /app/scripts
 
 USER app
 

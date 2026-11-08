@@ -15,7 +15,10 @@ settings = get_settings()
 limiter = Limiter(
     key_func=get_remote_address,
     enabled=settings.rate_limit_enabled,
-    headers_enabled=True,
+    # Endpoints return Pydantic models, not Response objects. Header injection
+    # would require adding a `response` parameter to every route; the 429
+    # handler still sends Retry-After.
+    headers_enabled=False,
 )
 
 # Auth-adjacent limits are intentionally tight; reads are generous.

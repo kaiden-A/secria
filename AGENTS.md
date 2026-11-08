@@ -128,6 +128,21 @@ never commit it. `.env.example` documents every setting.
 - Rotating `SECRIA_MASTER_KEY` requires re-wrapping project DEKs; losing it makes
   every secret unrecoverable.
 
+## Deploy
+
+- Cloud Run `secria` in `asia-southeast1`; image
+  `<DOCKERHUB_USERNAME>/secria` from `vars.APP_NAME`. CD is
+  `.github/workflows/cd.yml` on pushes to `main` under `server/**`.
+- Build context is `./server`; the image is the two-stage uv Dockerfile. Run as
+  non-root, listen on `0.0.0.0:${PORT}`.
+- Deploys never run migrations. Run `alembic upgrade head` explicitly.
+- Set `FORWARDED_ALLOW_IPS=*` on Cloud Run so per-IP throttling sees the real
+  client, and `COOKIE_SECURE=true` in production.
+- The Vercel client is pinned to `sin1` by `client/vercel.json`; set `API_ORIGIN`
+  to the Cloud Run URL.
+- CI (`.github/workflows/ci.yml`) runs server, client, and CLI checks on every
+  push and pull request.
+
 ## Phase status
 
 - Phase 0: scaffold, config, design foundation, CI. **Complete.**

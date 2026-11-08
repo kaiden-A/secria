@@ -2,7 +2,9 @@
 
 ## Web (`client/`)
 
-Deploy to Vercel or any Node host.
+Deploy to Vercel or any Node host. `client/vercel.json` pins the Vercel
+functions to `sin1` (Singapore, next to Neon and Cloud Run); without it they
+default to `iad1` and every API call crosses the Pacific twice.
 
 - Set `API_ORIGIN` to the public FastAPI origin (for example
   `https://api.example.com`). The browser only talks to the web origin because
@@ -18,6 +20,17 @@ Build the Docker image with `server/` as the context:
 docker build -t secria-api ./server
 docker run --rm -p 8080:8080 --env-file .env secria-api
 ```
+
+Production runs on Cloud Run in `asia-southeast1`, the same deploy shape as
+neoma-study and solace-garden. The service is `secria`; the image is
+`<dockerhub-user>/secria`, built by `.github/workflows/cd.yml`.
+
+- Cloud Run injects `PORT`; the container listens on `0.0.0.0:${PORT}`.
+- Set `FORWARDED_ALLOW_IPS=*` on the service so uvicorn trusts Cloud Run's
+  `X-Forwarded-For`. Without it the per-IP rate limiter sees the proxy address
+  and every caller shares one bucket.
+- Point the platform health check at `GET /api/health`.
+- Keep the service in `asia-southeast1`, next to Neon.
 
 Required production env:
 
@@ -62,6 +75,31 @@ Migrations are explicit; deploys do not run them automatically:
 ```bash
 uv run --directory server alembic upgrade head
 ```
+
+## CD
+
+`.github/workflows/cd.yml` mirrors the neoma-study / solace-garden pipeline:
+
+1. Trigger on pushes to `main` that touch `server/**`.
+2. Build `server/Dockerfile` with context `./server`.
+3. Push `<DOCKERHUB_USERNAME>/<APP_NAME>:<short-sha>` and `:latest`.
+4. Deploy that tag to Cloud Run in `asia-southeast1`.
+
+Repository configuration:
+
+| Kind | Name | Value |
+|---|---|---|
+| secret | `DOCKERHUB_USERNAME` | Docker Hub account |
+| secret | `DOCKERHUB_TOKEN` | Docker Hub access token |
+| secret | `GCP_SA_KEY` | service-account JSON |
+| variable | `APP_NAME` | `secria` |
+
+The deploy service account needs `roles/run.developer` and
+`roles/iam.serviceAccountUser` on the Cloud Run runtime service account.
+
+The workflow is pinned to `main`; a `master`/`main` mismatch means it never
+fires. It only rebuilds the API — the Vercel client deploys from the same push
+through its git integration. Migrations stay manual (above).
 
 ## Database
 
