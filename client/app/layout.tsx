@@ -29,6 +29,9 @@ const plexMono = IBM_Plex_Mono({
 const ICON =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230A3A46'/%3E%3Ccircle cx='16' cy='12.4' r='4.2' fill='%23C7F464'/%3E%3Cpath d='M13.35 15.9 12 24h8l-1.35-8.1a5.9 5.9 0 0 1-5.3 0Z' fill='%23C7F464'/%3E%3C/svg%3E";
 
+// Apply the stored/system theme before paint so there is no light flash.
+const THEME_SCRIPT = `(function(){try{var k="secria-theme";var s=localStorage.getItem(k);var d=s==="dark"||(s!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);var r=document.documentElement;r.dataset.theme=d?"dark":"light";r.style.colorScheme=d?"dark":"light";}catch(e){}})();`;
+
 export const metadata: Metadata = {
   title: {
     default: "Secria — self-hosted secrets manager",
@@ -51,8 +54,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  colorScheme: "light",
-  themeColor: "#F7FBFB",
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F7FBFB" },
+    { media: "(prefers-color-scheme: dark)", color: "#06141A" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -60,7 +66,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       className={`${sora.variable} ${manrope.variable} ${plexMono.variable}`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body>
         <Providers>{children}</Providers>
       </body>

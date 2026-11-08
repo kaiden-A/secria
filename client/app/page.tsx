@@ -10,6 +10,7 @@ import {
   Terminal,
 } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const LEDGER_ROWS = [
   { key: "DATABASE_URL", status: "synced" },
@@ -63,6 +64,7 @@ export default function LandingPage() {
           <a className="sc-nav-link" href="#security">
             Security
           </a>
+          <ThemeToggle />
           <Link className="sc-btn sc-btn--primary sc-btn--small" href="/login">
             Sign in
             <ArrowRight size={15} />

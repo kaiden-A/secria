@@ -78,6 +78,10 @@ never commit it. `.env.example` documents every setting.
 - `app/globals.css` owns the design tokens and `sc-*` component classes. Reuse
   them instead of adding one-off styles. The dashboard layer covers the app
   shell, project cards, tables, dialogs, menus, diffs, and the invite landing.
+- Theme is `data-theme="light|dark"` on `<html>`, defaulting to
+  `prefers-color-scheme` and persisted in `localStorage["secria-theme"]`.
+  `ThemeToggle` is the only setter; use semantic tokens (`--heading`,
+  `--primary`, `--on-dark`, `--on-lime`) instead of hard-coded light colours.
 - Dashboard routes: `/w/[ws]` (projects), `/w/[ws]/members`, `/w/[ws]/audit`,
   `/w/[ws]/p/[project]` (secrets), `/access`, `/tokens`, `/settings`, and
   `/invite/[token]`. `ProjectShell` provides the project context to its tabs.

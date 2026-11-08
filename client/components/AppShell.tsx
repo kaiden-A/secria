@@ -16,6 +16,7 @@ import { useState } from "react";
 
 import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 import { Logo } from "@/components/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, RoleBadge, Skeleton } from "@/components/ui/bits";
 import {
   DropdownMenu,
@@ -186,6 +187,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Breadcrumbs items={crumbs} />
           </div>
           <div className="sc-topbar-right">
+            <ThemeToggle />
             {workspace ? <RoleBadge role={workspace.role} /> : null}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

@@ -6,25 +6,38 @@ hairline rules, monospaced keys, and a single signal colour that means “live�
 
 ## Tokens
 
-| Token | Value | Use |
-| --- | --- | --- |
-| `--paper` | `#F7FBFB` | Page canvas |
-| `--paper-2` | `#EFF7F7` | Subtle inset surfaces |
-| `--card` | `#FFFFFF` | Cards, dialogs, tables |
-| `--petrol` | `#0A3A46` | Primary buttons, nav, headings |
-| `--petrol-deep` | `#062A33` | Dark panels, rail, hero headers |
-| `--petrol-soft` | `#E3EFF0` | Selected rows, icon wells |
-| `--lime` | `#C7F464` | Active nav bar, focus, status, logo |
-| `--lime-soft` | `rgba(199,244,100,0.18)` | Focus halo, new/active badges |
-| `--ink` | `#0B2229` | Body text |
-| `--ink-muted` | `#5A7177` | Secondary text |
-| `--rule` | `#DCE9EA` | Hairline borders |
-| `--rule-strong` | `#C6DADB` | Input borders, controls |
-| `--danger` | `#C34A3A` | Destructive actions, errors |
+| Token | Light | Dark | Use |
+| --- | --- | --- | --- |
+| `--paper` | `#F7FBFB` | `#06141A` | Page canvas |
+| `--paper-2` | `#EFF7F7` | `#0A2028` | Subtle inset surfaces |
+| `--card` | `#FFFFFF` | `#0D242D` | Cards, dialogs, tables |
+| `--petrol` | `#0A3A46` | `#8AD8E2` | Accent text, brand, controls |
+| `--petrol-deep` | `#062A33` | `#041014` | Dark panels, rail, hero headers |
+| `--petrol-soft` | `#E3EFF0` | `rgba(138,216,226,.12)` | Selected rows, icon wells |
+| `--heading` | `#062A33` | `#EDF8F9` | Display and card headings |
+| `--primary` | `#0A3A46` | `#8AD8E2` | Primary button surface |
+| `--on-primary` | `#F7FBFB` | `#041014` | Text on primary buttons |
+| `--lime` | `#C7F464` | `#C7F464` | Active nav bar, focus, status, logo |
+| `--lime-soft` | `rgba(199,244,100,.18)` | `rgba(199,244,100,.12)` | Focus halo, new/active badges |
+| `--on-lime` | `#3F5A00` | `#D9FF8A` | Text on lime-soft badges |
+| `--ink` | `#0B2229` | `#E8F3F4` | Body text |
+| `--ink-muted` | `#5A7177` | `#93ADB2` | Secondary text |
+| `--rule` | `#DCE9EA` | `#183840` | Hairline borders |
+| `--rule-strong` | `#C6DADB` | `#2A5560` | Input borders, controls |
+| `--danger` | `#C34A3A` | `#FF9381` | Destructive actions, errors |
 
 Signal lime is an **accent**, never a surface. Large lime areas are reserved for
 the primary CTA on a petrol panel and the logo keyhole. Everything else uses it
 for a 2–3px indicator, a dot, a focus ring, or a status badge.
+
+## Dark mode
+
+The theme is a `data-theme="light|dark"` attribute on `<html>`. It defaults to
+the OS `prefers-color-scheme`, is persisted in `localStorage["secria-theme"]`,
+and is applied by an inline script before paint so there is no flash. The
+`ThemeToggle` component lives in the topbar, landing nav, login page, invite
+page, and 404 page. Keep dark mode token-driven: add a semantic token instead of
+hard-coding a light-only colour.
 
 ## Type
 

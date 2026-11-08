@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { Check, Lock, Shield } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -65,6 +66,9 @@ export default async function LoginPage({
       </aside>
 
       <section className="sc-login-main">
+        <div className="sc-login-theme">
+          <ThemeToggle />
+        </div>
         <div className="sc-login-card">
           <span className="sc-login-icon">
             <Shield size={22} />

@@ -146,6 +146,8 @@ After signing in at <http://localhost:3000>:
   direct project access and environment restrictions.
 - Create scoped service tokens and revoke them immediately.
 - Review the audit log with project, action, and actor filters.
+- Switch between light and dark with the moon/sun button in the topbar. The
+  choice is saved; otherwise Secria follows your OS preference.
 
 ## CLI
 

@@ -1,10 +1,14 @@
 import Link from "next/link";
 
 import { Logo } from "@/components/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function NotFound() {
   return (
     <main className="sc-notfound">
+      <div className="sc-notfound-theme">
+        <ThemeToggle />
+      </div>
       <div className="sc-notfound-card">
         <Logo size={38} />
         <p className="sc-eyebrow">404 · not in the ledger</p>

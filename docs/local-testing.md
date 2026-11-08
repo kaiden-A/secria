@@ -61,6 +61,8 @@ the flow with `http://localhost:3000/login?next=/api/v1/me`.
    dialog shows a copyable link instead of sending email.
 5. Open **Audit** to see the reveal, update, rollback, token, and invite events.
    Values never appear there.
+6. Use the moon/sun button in the topbar to switch themes. The choice persists;
+   with no saved choice, Secria follows the operating system.
 
 ## Try the CLI
 

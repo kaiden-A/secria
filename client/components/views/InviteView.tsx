@@ -7,6 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Logo } from "@/components/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge, RoleBadge, Skeleton } from "@/components/ui/bits";
 import { ApiError, apiPost } from "@/lib/api-client";
 import { formatMs } from "@/lib/format";
@@ -44,7 +45,10 @@ export function InviteView() {
           <Logo size={30} />
           <span className="sc-brand-word">SECRIA</span>
         </Link>
-        <span className="sc-mono sc-cell-muted">A sealed invitation</span>
+        <div className="sc-invite-top-right">
+          <span className="sc-mono sc-cell-muted">A sealed invitation</span>
+          <ThemeToggle />
+        </div>
       </div>
 
       <section className="sc-invite-card">
