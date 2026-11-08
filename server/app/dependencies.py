@@ -23,11 +23,17 @@ class Principal:
 
 
 @lru_cache(maxsize=4)
-def _zitadel_client(issuer: str, client_id: str, api_audience: str | None) -> ZitadelClient:
+def _zitadel_client(
+    issuer: str,
+    client_id: str,
+    api_audience: str | None,
+    cli_client_id: str | None,
+) -> ZitadelClient:
     return ZitadelClient(
         issuer=issuer,
         client_id=client_id,
         api_audience=api_audience,
+        cli_client_id=cli_client_id,
         http=httpx.Client(timeout=10.0),
     )
 
@@ -37,6 +43,7 @@ def get_zitadel(settings: Settings = Depends(get_settings)) -> ZitadelClient:
         settings.zitadel_issuer.rstrip("/"),
         settings.zitadel_client_id,
         settings.zitadel_api_audience or None,
+        settings.zitadel_cli_client_id or None,
     )
 
 

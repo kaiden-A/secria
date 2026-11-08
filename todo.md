@@ -23,6 +23,8 @@ against the hosted API.
 | Default server | `https://elysiaa-secria-server-1023333674013.asia-southeast1.run.app` |
 | Server override | `--server`, `SECRIA_API_URL`, saved config, `.secria.yaml` `server` |
 | Discovery | Public `GET /api/v1/config` (`apiUrl`, `issuer`, `clientId`) |
+| Zitadel clients | Web app in `ZITADEL_CLIENT_ID`; separate Native CLI app in `ZITADEL_CLI_CLIENT_ID` (Device Code + Refresh Token) |
+| CLI audience | API accepts both the web and CLI client IDs as bearer audiences |
 | Login | Zitadel Device Authorization Grant (browser opens, code pre-filled) |
 | Tokens | OS keychain, keyed per host (`secria:<host>`), `0600` file fallback |
 | YAML | `ruamel.yaml` (pure Python; PyYAML has no cp315 wheels) |
@@ -48,7 +50,10 @@ against the hosted API.
 - [x] Register the router in `server/app/main.py`.
 - [x] Return only `apiUrl`, `issuer`, `clientId`; cache for five minutes.
 - [x] Fall back to the request origin when `API_BASE_URL` is localhost.
-- [x] Add `server/tests/test_config.py`.
+- [x] Add `ZITADEL_CLI_CLIENT_ID`; `clientId` returns the CLI client when set,
+      otherwise the web client.
+- [x] Accept both the web and CLI client IDs as bearer audiences.
+- [x] Add `server/tests/test_config.py` and CLI-audience coverage.
 - [x] Document the endpoint in `docs/api.md`.
 
 ### CLI
@@ -74,9 +79,11 @@ against the hosted API.
 ### Deploy checklist
 
 - [ ] Push `server/**` to `main` so CD deploys the new endpoint.
-- [ ] Confirm Cloud Run has `ZITADEL_ISSUER`/`ZITADEL_CLIENT_ID` for the native
-      app with the device grant enabled.
-- [ ] Verify `GET https://<cloud-run-url>/api/v1/config` from outside.
+- [ ] Confirm Cloud Run has `ZITADEL_ISSUER` and the web app's
+      `ZITADEL_CLIENT_ID`.
+- [ ] Set `ZITADEL_CLI_CLIENT_ID` to the Native CLI app's client ID in Cloud Run.
+- [ ] Enable **Device Code** and **Refresh Token** on that Native app.
+- [ ] Verify `GET https://<cloud-run-url>/api/v1/config` returns the CLI client ID.
 - [ ] Run `secria login --server <cloud-run-url>` against the deployed API.
 - [ ] Decide the final custom domain; then update `DEFAULT_API_URL`.
 - [ ] Set `API_BASE_URL` to the custom domain (optional; request origin works).

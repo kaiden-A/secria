@@ -13,7 +13,8 @@ milliseconds.
 No authentication and no database access. The response contains only public
 OAuth values; never a client secret, token, or server setting. It is cached for
 five minutes and exists so `secria login` can discover a self-hosted instance
-from one URL.
+from one URL. `clientId` is `ZITADEL_CLI_CLIENT_ID` when that is set, otherwise
+`ZITADEL_CLIENT_ID`, so the web app and CLI can use separate Zitadel apps.
 
 ## Auth
 

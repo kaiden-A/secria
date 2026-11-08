@@ -44,6 +44,7 @@ class ZitadelClient:
     client_id: str
     http: httpx.Client
     api_audience: str | None = None
+    cli_client_id: str | None = None
     jwks: dict | None = None  # test seam: skip fetching the key set
     _discovery: dict | None = field(default=None, init=False, repr=False)
 
@@ -108,10 +109,12 @@ class ZitadelClient:
         """Validate a CLI bearer JWT.
 
         The CLI sends the ID token from the device flow by default, whose
-        audience is the client ID. If ZITADEL_API_AUDIENCE is configured, an
-        access token for that audience is accepted too.
+        audience is the CLI client ID (or the shared client ID). The API accepts
+        the web client ID, the optional CLI client ID, and ZITADEL_API_AUDIENCE.
         """
         audiences = [self.client_id]
+        if self.cli_client_id and self.cli_client_id not in audiences:
+            audiences.append(self.cli_client_id)
         if self.api_audience and self.api_audience not in audiences:
             audiences.append(self.api_audience)
         return self._decode(token, audience=audiences)

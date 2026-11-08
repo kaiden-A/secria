@@ -32,5 +32,5 @@ def public_config(request: Request, response: Response) -> dict[str, str]:
     return {
         "apiUrl": _public_base_url(request, settings.api_base_url),
         "issuer": settings.zitadel_issuer.rstrip("/"),
-        "clientId": settings.zitadel_client_id,
+        "clientId": settings.zitadel_cli_client_id or settings.zitadel_client_id,
     }

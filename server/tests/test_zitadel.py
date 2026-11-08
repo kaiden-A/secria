@@ -37,6 +37,7 @@ def signing() -> Iterator[tuple[ZitadelClient, rsa.RSAPrivateKey]]:
         client_id="web-client",
         http=http,
         api_audience="api-audience",
+        cli_client_id="cli-client",
         jwks=jwks,
     )
     client._discovery = {
@@ -94,6 +95,7 @@ def test_verify_bearer_accepts_client_and_api_audiences(signing) -> None:
     client, private_key = signing
     assert client.verify_bearer(_token(private_key))["sub"] == "sub-1"
     assert client.verify_bearer(_token(private_key, aud="api-audience"))["sub"] == "sub-1"
+    assert client.verify_bearer(_token(private_key, aud="cli-client"))["sub"] == "sub-1"
 
     with pytest.raises(ZitadelError):
         client.verify_bearer(_token(private_key, aud="wrong-audience"))

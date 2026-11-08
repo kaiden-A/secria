@@ -66,6 +66,9 @@ class Settings(BaseSettings):
 
     zitadel_issuer: str = "https://<instance>.zitadel.cloud"
     zitadel_client_id: str = ""
+    # Optional separate Native app for the CLI's device flow. Falls back to
+    # ZITADEL_CLIENT_ID when empty, which keeps the web and CLI on one client.
+    zitadel_cli_client_id: str = ""
     zitadel_redirect_uri: str = "http://localhost:3000/api/auth/callback"
     zitadel_post_logout_uri: str = "http://localhost:3000/login"
     zitadel_api_audience: str = ""

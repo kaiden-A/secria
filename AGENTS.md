@@ -121,7 +121,9 @@ never commit it. `.env.example` documents every setting.
 - The default API URL is the Cloud Run service. `--server` and `SECRIA_API_URL`
   override it; self-hosted instances use those rather than editing source.
 - `GET /api/v1/config` is public and returns only `apiUrl`, `issuer`, and
-  `clientId`. `secria login` uses it, then the Zitadel device flow.
+  `clientId`. `clientId` is `ZITADEL_CLI_CLIENT_ID` when set, else
+  `ZITADEL_CLIENT_ID`, so web and CLI can use separate Zitadel apps. `secria
+  login` uses it, then the Zitadel device flow.
 - Tokens are keyed per server host in the OS keychain, with a `0600` file
   fallback. An installed CLI ignores project `.env` auth endpoints; a source
   checkout still reads the allowed keys for local development.

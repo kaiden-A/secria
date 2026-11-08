@@ -206,7 +206,8 @@ uv run --directory cli secria --help
 | `SECRIA_MASTER_KEY_VERSION` | KEK version for rotation |
 | `APP_SECRET` | Signs the OAuth handshake cookie |
 | `ZITADEL_ISSUER` | Zitadel instance URL |
-| `ZITADEL_CLIENT_ID` | PKCE public client / device-flow client |
+| `ZITADEL_CLIENT_ID` | Web app PKCE public client |
+| `ZITADEL_CLI_CLIENT_ID` | Optional Native app for the CLI device flow; falls back to `ZITADEL_CLIENT_ID` |
 | `ZITADEL_REDIRECT_URI` | Web callback URL |
 | `ZITADEL_POST_LOGOUT_URI` | Post-logout landing page |
 | `ZITADEL_API_AUDIENCE` | Optional access-token audience for CLI bearer auth |
