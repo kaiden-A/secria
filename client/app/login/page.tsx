@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 function safeNext(value: string | undefined): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/w";
   return value;
 }
 

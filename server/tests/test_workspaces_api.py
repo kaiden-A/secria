@@ -39,8 +39,8 @@ def test_create_list_and_get_workspaces(client, sign_in, make_user, db) -> None:
     assert detail.json()["name"] == "Acme"
 
 
-def test_workspace_slug_conflict(client, sign_in, make_user) -> None:
-    sign_in(make_user)
+def test_workspace_slug_conflict(client, sign_in, make_user, db) -> None:
+    sign_in(make_user(db))
     _create_workspace(client, "Acme")
 
     response = client.post("/api/v1/workspaces", json={"name": "Other", "slug": "acme"})
@@ -48,11 +48,11 @@ def test_workspace_slug_conflict(client, sign_in, make_user) -> None:
 
 
 def test_workspace_update_requires_admin(client, sign_in, make_user, add_workspace_member, db) -> None:
-    owner = make_user()
+    owner = make_user(db)
     sign_in(owner)
     created = _create_workspace(client)
     workspace = _workspace_model(db, created)
-    member = make_user()
+    member = make_user(db)
     add_workspace_member(workspace, member, WorkspaceRole.member)
 
     sign_in(member)
@@ -68,11 +68,11 @@ def test_workspace_update_requires_admin(client, sign_in, make_user, add_workspa
 def test_workspace_members_include_project_grants(
     client, sign_in, make_user, add_workspace_member, db
 ) -> None:
-    owner = make_user()
+    owner = make_user(db)
     sign_in(owner)
     created = _create_workspace(client)
     workspace = _workspace_model(db, created)
-    member = make_user()
+    member = make_user(db)
     add_workspace_member(workspace, member, WorkspaceRole.member)
 
     project_response = client.post(
@@ -95,8 +95,8 @@ def test_workspace_members_include_project_grants(
     assert members[str(member.id)]["projectGrants"][0]["role"] == "editor"
 
 
-def test_last_owner_cannot_be_demoted_or_removed(client, sign_in, make_user) -> None:
-    owner = make_user()
+def test_last_owner_cannot_be_demoted_or_removed(client, sign_in, make_user, db) -> None:
+    owner = make_user(db)
     sign_in(owner)
     created = _create_workspace(client)
 
@@ -113,11 +113,11 @@ def test_last_owner_cannot_be_demoted_or_removed(client, sign_in, make_user) -> 
 def test_owner_can_demote_when_another_owner_exists(
     client, sign_in, make_user, add_workspace_member, db
 ) -> None:
-    owner = make_user()
+    owner = make_user(db)
     sign_in(owner)
     created = _create_workspace(client)
     workspace = _workspace_model(db, created)
-    second_owner = make_user()
+    second_owner = make_user(db)
     add_workspace_member(workspace, second_owner, WorkspaceRole.owner)
 
     response = client.patch(
@@ -131,11 +131,11 @@ def test_owner_can_demote_when_another_owner_exists(
 def test_admin_cannot_manage_owners(
     client, sign_in, make_user, add_workspace_member, db
 ) -> None:
-    owner = make_user()
+    owner = make_user(db)
     sign_in(owner)
     created = _create_workspace(client)
     workspace = _workspace_model(db, created)
-    admin = make_user()
+    admin = make_user(db)
     add_workspace_member(workspace, admin, WorkspaceRole.admin)
 
     sign_in(admin)
@@ -158,11 +158,11 @@ def test_admin_cannot_manage_owners(
 def test_removing_a_workspace_member_cascades_project_grants(
     client, sign_in, make_user, add_workspace_member, db
 ) -> None:
-    owner = make_user()
+    owner = make_user(db)
     sign_in(owner)
     created = _create_workspace(client)
     workspace = _workspace_model(db, created)
-    member = make_user()
+    member = make_user(db)
     add_workspace_member(workspace, member, WorkspaceRole.member)
     project = client.post(
         f"/api/v1/workspaces/{created['id']}/projects", json={"name": "API"}
@@ -192,8 +192,8 @@ def test_removing_a_workspace_member_cascades_project_grants(
     assert client.get(f"/api/v1/projects/{project['id']}").status_code == 404
 
 
-def test_workspace_counts(client, sign_in, make_user) -> None:
-    sign_in(make_user)
+def test_workspace_counts(client, sign_in, make_user, db) -> None:
+    sign_in(make_user(db))
     created = _create_workspace(client)
     project = client.post(
         f"/api/v1/workspaces/{created['id']}/projects", json={"name": "API"}
@@ -205,15 +205,46 @@ def test_workspace_counts(client, sign_in, make_user) -> None:
     assert listing[0]["projectCount"] == 1
 
 
-def test_cross_workspace_access_is_404(client, sign_in, make_user) -> None:
-    alice = make_user()
+def test_workspace_project_count_is_scoped_for_members(
+    client, sign_in, make_user, add_workspace_member, db
+) -> None:
+    owner = make_user(db)
+    sign_in(owner)
+    created = _create_workspace(client)
+    workspace = _workspace_model(db, created)
+    first = client.post(
+        f"/api/v1/workspaces/{created['id']}/projects", json={"name": "First"}
+    ).json()
+    client.post(f"/api/v1/workspaces/{created['id']}/projects", json={"name": "Second"})
+    member = make_user(db)
+    add_workspace_member(workspace, member, WorkspaceRole.member)
+
+    sign_in(member)
+    listing = client.get("/api/v1/workspaces").json()
+    assert listing[0]["projectCount"] == 0
+    assert listing[0]["memberCount"] == 2
+
+    sign_in(owner)
+    grant = client.put(
+        f"/api/v1/projects/{first['id']}/members/{member.id}",
+        json={"role": "viewer"},
+    )
+    assert grant.status_code == 200
+
+    sign_in(member)
+    listing = client.get("/api/v1/workspaces").json()
+    assert listing[0]["projectCount"] == 1
+
+
+def test_cross_workspace_access_is_404(client, sign_in, make_user, db) -> None:
+    alice = make_user(db)
     sign_in(alice)
     alice_workspace = _create_workspace(client, "Alice", "alice")
     alice_project = client.post(
         f"/api/v1/workspaces/{alice_workspace['id']}/projects", json={"name": "Alice API"}
     ).json()
 
-    bob = make_user()
+    bob = make_user(db)
     sign_in(bob)
     bob_workspace = _create_workspace(client, "Bob", "bob")
     bob_project = client.post(

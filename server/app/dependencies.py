@@ -8,16 +8,17 @@ from sqlalchemy.orm import Session as DbSession
 
 from .config import Settings, get_settings
 from .database import get_db
-from .models import User
-from .services import auth_services, security
+from .models import ServiceToken, User
+from .services import auth_services, security, token_services
 from .services.errors import UnauthorizedError
 from .services.zitadel import ZitadelClient
 
 
 @dataclass(frozen=True)
 class Principal:
-    user: User
-    via: Literal["session", "bearer"]
+    user: User | None = None
+    service_token: ServiceToken | None = None
+    via: Literal["session", "bearer", "service_token"] = "session"
     session_token_hash: str | None = None
 
 
@@ -57,7 +58,11 @@ def current_principal(
         if scheme.lower() != "bearer" or not raw:
             raise UnauthorizedError("Send a Bearer token.")
         if raw.startswith("secria_st_"):
-            raise UnauthorizedError("Service tokens are not enabled yet.")
+            service_token = token_services.authenticate_service_token(db, raw)
+            return Principal(
+                service_token=service_token,
+                via="service_token",
+            )
         user = auth_services.user_from_bearer(db, raw, zitadel)
         return Principal(user=user, via="bearer")
 
@@ -83,6 +88,8 @@ def require_principal(principal: Principal | None = Depends(current_principal)) 
 
 
 def require_user(principal: Principal = Depends(require_principal)) -> User:
+    if principal.user is None:
+        raise UnauthorizedError("A user session is required.")
     return principal.user
 
 

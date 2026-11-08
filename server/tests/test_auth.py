@@ -162,12 +162,12 @@ def test_invalid_bearer_does_not_fall_back_to_the_cookie(
     assert fake_idp.bearer_calls == ["bad-token"]
 
 
-def test_service_tokens_are_not_enabled_yet(idp_client) -> None:
+def test_unknown_service_token_is_rejected(idp_client) -> None:
     response = idp_client.get(
         "/api/v1/me", headers={"Authorization": "Bearer secria_st_placeholder"}
     )
     assert response.status_code == 401
-    assert "Service tokens" in response.json()["error"]
+    assert "invalid or revoked" in response.json()["error"]
 
 
 def test_bad_authorization_scheme_is_rejected(idp_client) -> None:

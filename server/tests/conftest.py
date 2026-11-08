@@ -17,6 +17,7 @@ from app.main import app
 from app.models import (
     Environment,
     Project,
+    ProjectKey,
     ProjectMember,
     ProjectMemberEnv,
     ProjectRole,
@@ -26,9 +27,13 @@ from app.models import (
     WorkspaceRole,
 )
 from app.services.auth_services import create_session
+from app.services.encryption import get_master_key, new_dek
 from app.services.zitadel import ZitadelError
 
 settings = get_settings()
+# The suite makes hundreds of requests from one test client IP; limits are
+# exercised against a live server instead of inside the unit tests.
+app.state.limiter.enabled = False
 SCHEMA = f"secria_test_{uuid.uuid4().hex[:8]}"
 assert settings.db_schema != SCHEMA, "refusing to run tests against the live schema"
 
@@ -72,6 +77,13 @@ def _clean_tables(_schema: None) -> Iterator[None]:
     tables = ", ".join(f'"{SCHEMA}"."{table.name}"' for table in Base.metadata.tables.values())
     with test_engine.begin() as connection:
         connection.execute(text(f"TRUNCATE {tables} CASCADE"))
+
+
+@pytest.fixture(autouse=True)
+def _emails_off(monkeypatch) -> None:
+    """Tests never touch the network: invites render and log only."""
+    monkeypatch.setattr(settings, "resend_api_key", "")
+    monkeypatch.setattr(settings, "email_override_to", "")
 
 
 @pytest.fixture
@@ -182,6 +194,15 @@ def make_project(db: DbSession):
             )
             db.add(environment)
             envs.append(environment)
+        master = get_master_key()
+        db.add(
+            ProjectKey(
+                project_id=project.id,
+                key_version=1,
+                encrypted_dek=master.wrap_dek(new_dek(), project_id=project.id, key_version=1),
+                kek_version=master.version,
+            )
+        )
         db.commit()
         return project, envs
 

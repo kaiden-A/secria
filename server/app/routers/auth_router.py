@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session as DbSession
 from ..config import Settings, get_settings
 from ..database import get_db
 from ..dependencies import get_zitadel
+from ..rate_limit import AUTH_LIMIT, limiter
 from ..schemas.auth import LogoutResponse
 from ..services import auth_services, security
 from ..services.errors import UnauthorizedError, UpstreamError
@@ -34,7 +35,7 @@ def _start_login(
         "state": state,
         "nonce": nonce,
         "code_verifier": verifier,
-        "next": local_path(request.query_params.get("next")),
+        "next": local_path(request.query_params.get("next"), default="/w"),
         "iat": int(time.time()),
     }
     login_hint = (request.query_params.get("login_hint") or "").strip()[:320] or None
@@ -63,6 +64,7 @@ def _start_login(
 
 
 @router.get("/login")
+@limiter.limit(AUTH_LIMIT)
 def login_get(
     request: Request,
     settings: Settings = Depends(get_settings),
@@ -73,6 +75,7 @@ def login_get(
 
 
 @router.post("/login")
+@limiter.limit(AUTH_LIMIT)
 def login_post(
     request: Request,
     settings: Settings = Depends(get_settings),
@@ -82,6 +85,7 @@ def login_post(
 
 
 @router.post("/signup")
+@limiter.limit(AUTH_LIMIT)
 def signup(
     request: Request,
     settings: Settings = Depends(get_settings),
@@ -92,6 +96,7 @@ def signup(
 
 
 @router.get("/callback")
+@limiter.limit(AUTH_LIMIT)
 def callback(
     request: Request,
     code: str | None = None,
@@ -164,6 +169,7 @@ def callback(
 
 
 @router.post("/logout")
+@limiter.limit(AUTH_LIMIT)
 def logout(
     request: Request,
     db: DbSession = Depends(get_db),

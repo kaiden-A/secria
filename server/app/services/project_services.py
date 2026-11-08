@@ -1,6 +1,7 @@
 import uuid
 from collections import defaultdict
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -29,6 +30,7 @@ from ..schemas.projects import (
     ProjectPatch,
 )
 from ..utils import to_ms
+from . import audit_services
 from .encryption import get_master_key, new_dek
 from .errors import ConflictError, InvalidError, NotFoundError, UnavailableError
 from .permissions import (
@@ -145,8 +147,23 @@ def list_projects(db: DbSession, user: User, workspace_id: uuid.UUID) -> list[Pr
             for project, environments, members in rows
         ]
 
+    restricted_environment_count = (
+        select(func.count(ProjectMemberEnv.environment_id))
+        .where(
+            ProjectMemberEnv.project_id == Project.id,
+            ProjectMemberEnv.user_id == user.id,
+        )
+        .correlate(Project)
+        .scalar_subquery()
+    )
     rows = db.execute(
-        select(Project, ProjectMember.role, environment_count, member_count)
+        select(
+            Project,
+            ProjectMember.role,
+            environment_count,
+            restricted_environment_count,
+            member_count,
+        )
         .join(ProjectMember, ProjectMember.project_id == Project.id)
         .where(
             Project.workspace_id == workspace_id,
@@ -159,10 +176,10 @@ def list_projects(db: DbSession, user: User, workspace_id: uuid.UUID) -> list[Pr
         _project_out(
             project,
             role=role,
-            environment_count=environments or 0,
+            environment_count=restricted or environments or 0,
             member_count=members or 0,
         )
-        for project, role, environments, members in rows
+        for project, role, environments, restricted, members in rows
     ]
 
 
@@ -224,6 +241,15 @@ def create_project(
             kek_version=master.version,
         )
     )
+    audit_services.record(
+        db,
+        workspace_id=workspace_id,
+        project_id=project.id,
+        actor=user,
+        action="project.created",
+        target=f"project:{project.slug}",
+        metadata={"environments": [env_slug for _name, env_slug, _pos in DEFAULT_ENVIRONMENTS]},
+    )
     try:
         db.commit()
     except IntegrityError as exc:
@@ -263,6 +289,26 @@ def update_project(
     if patch.archived is not None:
         project.archived_at = utcnow() if patch.archived else None
 
+    fields = [
+        field
+        for field in ("name", "slug", "description", "archived")
+        if getattr(patch, field) is not None
+    ]
+    if patch.archived is True:
+        action = "project.archived"
+    elif patch.archived is False:
+        action = "project.restored"
+    else:
+        action = "project.updated"
+    audit_services.record(
+        db,
+        workspace_id=access.workspace.id,
+        project_id=project.id,
+        actor=user,
+        action=action,
+        target=f"project:{project.slug}",
+        metadata={"fields": fields},
+    )
     try:
         db.commit()
     except IntegrityError as exc:
@@ -273,6 +319,16 @@ def update_project(
 
 def delete_project(db: DbSession, user: User, project_id: uuid.UUID) -> None:
     access = require_project_access(db, user, project_id, roles={ProjectRole.admin})
+    audit_services.record(
+        db,
+        workspace_id=access.workspace.id,
+        project_id=access.project.id,
+        actor=user,
+        action="project.deleted",
+        target=f"project:{access.project.slug}",
+        metadata={},
+    )
+    db.flush()
     db.delete(access.project)
     db.commit()
 
@@ -297,7 +353,7 @@ def create_environment(
     project_id: uuid.UUID,
     data: EnvironmentCreate,
 ) -> EnvironmentOut:
-    require_project_access(db, user, project_id, roles={ProjectRole.admin})
+    access = require_project_access(db, user, project_id, roles={ProjectRole.admin})
     slug = normalize_slug(data.slug, fallback=data.name)
     if (
         db.scalar(
@@ -316,12 +372,24 @@ def create_environment(
     next_position = 0 if max_position is None else max_position + 1
     position = data.position if data.position is not None else next_position
     environment = Environment(
+        id=uuid.uuid4(),
         project_id=project_id,
         name=_clean_name(data.name),
         slug=slug,
         position=position,
     )
     db.add(environment)
+    db.flush()
+    audit_services.record(
+        db,
+        workspace_id=access.workspace.id,
+        project_id=project_id,
+        environment_id=environment.id,
+        actor=user,
+        action="environment.created",
+        target=f"environment:{environment.slug}",
+        metadata={"position": position},
+    )
     try:
         db.commit()
     except IntegrityError as exc:
@@ -367,6 +435,7 @@ def list_project_members(
             role=ProjectRole.admin,
             environmentIds=None,
             joinedAt=int(to_ms(membership.created_at) or 0),
+            source="workspace",
         )
 
     project_rows = db.execute(
@@ -385,6 +454,7 @@ def list_project_members(
             role=project_member.role,
             environmentIds=environment_ids.get(project_member.user_id) or None,
             joinedAt=int(to_ms(project_member.created_at) or 0),
+            source="project",
         )
 
     return sorted(result.values(), key=lambda member: (member.name.lower(), member.email.lower()))
@@ -398,6 +468,7 @@ def _project_member_out(
     *,
     role: ProjectRole,
     joined_at: datetime,
+    source: Literal["workspace", "project"] = "project",
 ) -> ProjectMemberOut:
     environment_ids = (
         []
@@ -418,6 +489,7 @@ def _project_member_out(
         role=role,
         environmentIds=[str(environment_id) for environment_id in environment_ids] or None,
         joinedAt=int(to_ms(joined_at) or 0),
+        source=source,
     )
 
 
@@ -470,13 +542,26 @@ def put_project_member(
                 environment_id=environment_id,
             )
         )
-    db.commit()
 
     effective_role = (
         ProjectRole.admin
         if target_membership.role in {WorkspaceRole.owner, WorkspaceRole.admin}
         else data.role
     )
+    audit_services.record(
+        db,
+        workspace_id=access.workspace.id,
+        project_id=project_id,
+        actor=user,
+        action="project.member_granted",
+        target=f"user:{target_user.email}",
+        metadata={
+            "role": effective_role.value,
+            "environmentIds": sorted(str(environment_id) for environment_id in requested),
+        },
+    )
+    db.commit()
+
     return _project_member_out(
         db,
         project_id,
@@ -484,6 +569,11 @@ def put_project_member(
         target_user,
         role=effective_role,
         joined_at=row.created_at,
+        source=(
+            "workspace"
+            if target_membership.role in {WorkspaceRole.owner, WorkspaceRole.admin}
+            else "project"
+        ),
     )
 
 
@@ -493,9 +583,19 @@ def remove_project_member(
     project_id: uuid.UUID,
     member_id: uuid.UUID,
 ) -> None:
-    require_project_access(db, user, project_id, roles={ProjectRole.admin})
+    access = require_project_access(db, user, project_id, roles={ProjectRole.admin})
     row = db.get(ProjectMember, (project_id, member_id))
     if row is None:
         raise NotFoundError("Project member not found.")
+    target_user = db.get(User, member_id)
+    audit_services.record(
+        db,
+        workspace_id=access.workspace.id,
+        project_id=project_id,
+        actor=user,
+        action="project.member_removed",
+        target=f"user:{target_user.email if target_user else member_id}",
+        metadata={},
+    )
     db.delete(row)
     db.commit()

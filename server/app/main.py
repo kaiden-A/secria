@@ -7,16 +7,22 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .config import get_settings
 from .logging_config import configure_logging
+from .rate_limit import limiter
 from .routers import (
+    audit_router,
     auth_router,
     health_router,
+    invites_router,
     me_router,
     projects_router,
+    secrets_router,
+    service_tokens_router,
     workspaces_router,
 )
 from .services.errors import ServiceError
@@ -39,6 +45,7 @@ app = FastAPI(
     description="Self-hosted secrets manager API.",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
 
 
 class SecurityHeaders:
@@ -56,11 +63,19 @@ class SecurityHeaders:
             if message["type"] == "http.response.start":
                 headers = message.setdefault("headers", [])
                 present = {key.lower() for key, _value in headers}
-                additions = (
+                additions = [
                     (b"x-content-type-options", b"nosniff"),
                     (b"referrer-policy", b"no-referrer"),
                     (b"x-frame-options", b"DENY"),
-                )
+                ]
+                path = scope.get("path", "")
+                if "/secrets" in path or "/audit-logs" in path or "/service-tokens" in path:
+                    additions.extend(
+                        (
+                            (b"cache-control", b"no-store"),
+                            (b"pragma", b"no-cache"),
+                        )
+                    )
                 for key, value in additions:
                     if key not in present:
                         headers.append((key, value))
@@ -117,6 +132,16 @@ async def service_error(_request: Request, exc: ServiceError) -> JSONResponse:
     return JSONResponse({"error": exc.message}, status_code=exc.status_code)
 
 
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_error(_request: Request, _exc: RateLimitExceeded) -> JSONResponse:
+    response = JSONResponse(
+        {"error": "Too many requests. Try again shortly."},
+        status_code=429,
+    )
+    response.headers["Retry-After"] = "60"
+    return response
+
+
 @app.get("/", tags=["meta"])
 def root() -> dict[str, str]:
     return {"name": "Secria API", "version": "0.1.0", "docs": "/docs"}
@@ -127,3 +152,7 @@ app.include_router(auth_router.router)
 app.include_router(me_router.router)
 app.include_router(workspaces_router.router)
 app.include_router(projects_router.router)
+app.include_router(secrets_router.router)
+app.include_router(invites_router.router)
+app.include_router(service_tokens_router.router)
+app.include_router(audit_router.router)

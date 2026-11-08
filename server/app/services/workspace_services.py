@@ -15,6 +15,7 @@ from ..schemas.workspaces import (
     WorkspacePatch,
 )
 from ..utils import to_ms
+from . import audit_services
 from .errors import ConflictError, ForbiddenError, InvalidError, NotFoundError
 from .permissions import require_workspace_admin, require_workspace_member
 from .slugs import normalize_slug
@@ -32,58 +33,121 @@ def _workspace_out(
     workspace: Workspace,
     *,
     role: WorkspaceRole,
+    user_id: uuid.UUID,
 ) -> WorkspaceOut:
     member_count = db.scalar(
         select(func.count())
         .select_from(WorkspaceMember)
         .where(WorkspaceMember.workspace_id == workspace.id)
     )
-    project_count = db.scalar(
-        select(func.count())
-        .select_from(Project)
-        .where(Project.workspace_id == workspace.id, Project.archived_at.is_(None))
-    )
+    project_count = _accessible_project_count(db, workspace.id, user_id, role)
     return WorkspaceOut(
         id=str(workspace.id),
         name=workspace.name,
         slug=workspace.slug,
         role=role,
         memberCount=member_count or 0,
-        projectCount=project_count or 0,
+        projectCount=project_count,
         createdAt=int(to_ms(workspace.created_at) or 0),
     )
 
 
+def _accessible_project_count(
+    db: DbSession,
+    workspace_id: uuid.UUID,
+    user_id: uuid.UUID,
+    role: WorkspaceRole,
+) -> int:
+    if role in {WorkspaceRole.owner, WorkspaceRole.admin}:
+        count = db.scalar(
+            select(func.count())
+            .select_from(Project)
+            .where(Project.workspace_id == workspace_id, Project.archived_at.is_(None))
+        )
+    else:
+        count = db.scalar(
+            select(func.count())
+            .select_from(Project)
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .where(
+                Project.workspace_id == workspace_id,
+                ProjectMember.user_id == user_id,
+                Project.archived_at.is_(None),
+            )
+        )
+    return count or 0
+
+
 def list_workspaces(db: DbSession, user: User) -> list[WorkspaceOut]:
-    member_count = (
-        select(func.count(WorkspaceMember.user_id))
-        .where(WorkspaceMember.workspace_id == Workspace.id)
-        .correlate(Workspace)
-        .scalar_subquery()
-    )
-    project_count = (
-        select(func.count(Project.id))
-        .where(Project.workspace_id == Workspace.id, Project.archived_at.is_(None))
-        .correlate(Workspace)
-        .scalar_subquery()
-    )
     rows = db.execute(
-        select(Workspace, WorkspaceMember.role, member_count, project_count)
+        select(Workspace, WorkspaceMember.role)
         .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
         .where(WorkspaceMember.user_id == user.id)
         .order_by(Workspace.name)
     ).all()
+    if not rows:
+        return []
+
+    workspace_ids = [workspace.id for workspace, _role in rows]
+    member_counts = dict(
+        db.execute(
+            select(WorkspaceMember.workspace_id, func.count())
+            .where(WorkspaceMember.workspace_id.in_(workspace_ids))
+            .group_by(WorkspaceMember.workspace_id)
+        ).all()
+    )
+    admin_ids = [
+        workspace.id
+        for workspace, role in rows
+        if role in {WorkspaceRole.owner, WorkspaceRole.admin}
+    ]
+    member_ids = [
+        workspace.id
+        for workspace, role in rows
+        if role not in {WorkspaceRole.owner, WorkspaceRole.admin}
+    ]
+    project_counts: dict[uuid.UUID, int] = {}
+    if admin_ids:
+        project_counts.update(
+            dict(
+                db.execute(
+                    select(Project.workspace_id, func.count())
+                    .where(
+                        Project.workspace_id.in_(admin_ids),
+                        Project.archived_at.is_(None),
+                    )
+                    .group_by(Project.workspace_id)
+                ).all()
+            )
+        )
+    if member_ids:
+        project_counts.update(
+            dict(
+                db.execute(
+                    select(Project.workspace_id, func.count())
+                    .select_from(Project)
+                    .join(ProjectMember, ProjectMember.project_id == Project.id)
+                    .where(
+                        Project.workspace_id.in_(member_ids),
+                        ProjectMember.user_id == user.id,
+                        Project.archived_at.is_(None),
+                    )
+                    .group_by(Project.workspace_id)
+                ).all()
+            )
+        )
+
     return [
         WorkspaceOut(
             id=str(workspace.id),
             name=workspace.name,
             slug=workspace.slug,
             role=role,
-            memberCount=members or 0,
-            projectCount=projects or 0,
+            memberCount=member_counts.get(workspace.id, 0),
+            projectCount=project_counts.get(workspace.id, 0),
             createdAt=int(to_ms(workspace.created_at) or 0),
         )
-        for workspace, role, members, projects in rows
+        for workspace, role in rows
     ]
 
 
@@ -92,7 +156,7 @@ def get_workspace(db: DbSession, user: User, workspace_id: uuid.UUID) -> Workspa
     workspace = db.get(Workspace, workspace_id)
     if workspace is None:
         raise NotFoundError("Workspace not found.")
-    return _workspace_out(db, workspace, role=member.role)
+    return _workspace_out(db, workspace, role=member.role, user_id=user.id)
 
 
 def create_workspace(db: DbSession, user: User, data: WorkspaceCreate) -> WorkspaceOut:
@@ -109,12 +173,20 @@ def create_workspace(db: DbSession, user: User, data: WorkspaceCreate) -> Worksp
             role=WorkspaceRole.owner,
         )
     )
+    audit_services.record(
+        db,
+        workspace_id=workspace.id,
+        actor=user,
+        action="workspace.created",
+        target=f"workspace:{workspace.slug}",
+        metadata={"name": workspace.name},
+    )
     try:
         db.commit()
     except IntegrityError as exc:
         db.rollback()
         raise ConflictError("That workspace slug is already in use.") from exc
-    return _workspace_out(db, workspace, role=WorkspaceRole.owner)
+    return _workspace_out(db, workspace, role=WorkspaceRole.owner, user_id=user.id)
 
 
 def update_workspace(
@@ -139,12 +211,26 @@ def update_workspace(
             if conflict is not None:
                 raise ConflictError("That workspace slug is already in use.")
             workspace.slug = slug
+    audit_services.record(
+        db,
+        workspace_id=workspace.id,
+        actor=user,
+        action="workspace.updated",
+        target=f"workspace:{workspace.slug}",
+        metadata={
+            "fields": [
+                field
+                for field in ("name", "slug")
+                if getattr(patch, field) is not None
+            ]
+        },
+    )
     try:
         db.commit()
     except IntegrityError as exc:
         db.rollback()
         raise ConflictError("That workspace slug is already in use.") from exc
-    return _workspace_out(db, workspace, role=member.role)
+    return _workspace_out(db, workspace, role=member.role, user_id=user.id)
 
 
 def _grants_by_user(
@@ -241,10 +327,18 @@ def update_member_role(
         raise ConflictError("A workspace must keep at least one owner.")
 
     target.role = patch.role
-    db.commit()
     target_user = db.get(User, member_id)
     if target_user is None:
         raise NotFoundError("Workspace member not found.")
+    audit_services.record(
+        db,
+        workspace_id=workspace_id,
+        actor=actor,
+        action="workspace.member_role_changed",
+        target=f"user:{target_user.email}",
+        metadata={"role": patch.role.value},
+    )
+    db.commit()
     return _member_out(db, workspace_id, target, target_user)
 
 
@@ -264,6 +358,15 @@ def remove_member(
             raise ConflictError("A workspace must keep at least one owner.")
 
     project_ids = select(Project.id).where(Project.workspace_id == workspace_id)
+    target_user = db.get(User, member_id)
+    audit_services.record(
+        db,
+        workspace_id=workspace_id,
+        actor=actor,
+        action="workspace.member_removed",
+        target=f"user:{target_user.email if target_user else member_id}",
+        metadata={},
+    )
     db.execute(
         delete(ProjectMember).where(
             ProjectMember.project_id.in_(project_ids),

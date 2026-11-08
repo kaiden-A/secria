@@ -46,6 +46,10 @@ secret_versions.ciphertext
   `read_write`.
 - Plaintext tokens are shown once. The API returns a service token only in the
   create response; the invite URL is returned to the admin who created it.
+- Service tokens are bearer credentials only: they cannot read `/me`, manage
+  workspace/project membership, or create/revoke other tokens.
+- Revocation is immediate. `last_used_at` is updated at most once every five
+  minutes to avoid a write on every request.
 
 ## Authorization
 
@@ -58,16 +62,34 @@ secret_versions.ciphertext
 - Removing a member revokes project access immediately. Their audit history is
   retained.
 
+## Secret lifecycle
+
+- Listing an environment returns key names, versions, and timestamps only;
+  values are never included.
+- Reveal and download are the only endpoints that return plaintext, and both are
+  audited. Downloads use `Cache-Control: no-store`.
+- Bulk upsert is transactional and limited to 1000 keys / 64 KB per value.
+  Unchanged values do not create a new version.
+- `replace` soft-deletes keys missing from the payload. Re-adding a deleted key
+  restores it and continues its version history.
+- Rollback decrypts the chosen version and writes a **new** version with the
+  active project key; history is never re-pointed.
+- Audit metadata contains key names, counts, roles, and version numbers. It
+  never contains a secret value.
+
 ## Rate limits
 
-Auth-adjacent endpoints, invite acceptance, secret reveal, download, diff, and
-bulk upsert are rate-limited. Limits are per-IP for anonymous requests and
-per-user for authenticated requests. `RATE_LIMIT_ENABLED=false` disables them in
-tests.
+Limits are per client IP. Login/signup/callback/logout, invite create/resend,
+secret reveal/download, and service-token create are limited; reads are
+generous and the dashboard is not throttled in normal use. Responses return
+`429` with `{"error": "Too many requests. Try again shortly."}` and a
+`Retry-After` header. `RATE_LIMIT_ENABLED=false` disables them for load tests.
 
 ## Response hygiene
 
-- `Cache-Control: no-store`, `Pragma: no-cache` on every secrets response.
+- `Cache-Control: no-store`, `Pragma: no-cache` on every secrets response, audit
+  response, and service-token response (the create response contains the only
+  plaintext token).
 - Bulk upsert is transactional and capped at 1000 keys / 64 KB per value.
 - Secret keys must match `^[A-Z_][A-Z0-9_]*$` and are stored in plaintext
   (needed for listing and diffing).

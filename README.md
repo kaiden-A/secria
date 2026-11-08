@@ -117,7 +117,8 @@ secria/
    ```
 
    Web: <http://localhost:3000> · API: <http://localhost:8000> · API docs:
-   <http://localhost:8000/docs>
+   <http://localhost:8000/docs> · Implemented surface: `docs/api.md` ·
+   Local walkthrough: `docs/local-testing.md`
 
 ## Commands
 
@@ -132,12 +133,51 @@ uv run --directory server alembic upgrade head
 uv run --directory server alembic revision --autogenerate -m "change"
 ```
 
+## Dashboard
+
+After signing in at <http://localhost:3000>:
+
+- Create a workspace and a project; the project gets `dev`, `staging`, `prod`,
+  its own encryption key, and default access for workspace admins.
+- Manage secrets per environment: reveal/copy (audited, auto-hides after 30s),
+  create, edit, import `.env` with a hash-only diff preview, download, delete,
+  version history, and rollback.
+- Invite people with a workspace role and optional per-project grants; manage
+  direct project access and environment restrictions.
+- Create scoped service tokens and revoke them immediately.
+- Review the audit log with project, action, and actor filters.
+
+## CLI
+
+```bash
+uv run --directory cli secria --help
+uv run --directory cli secria login
+uv run --directory cli secria init                 # link this directory
+uv run --directory cli secria push .env --env dev
+uv run --directory cli secria diff .env
+uv run --directory cli secria pull --env prod --out .env.prod --force
+uv run --directory cli secria run --env dev -- npm start
+uv run --directory cli secria secrets list
+uv run --directory cli secria secrets get DATABASE_URL
+uv run --directory cli secria token create --env prod --name ci-github
+```
+
+- `push` shows a key-only diff and asks before writing. `--replace` asks again.
+- `pull` refuses to overwrite without `--force` and writes mode `0600`.
+- `run` injects secrets in memory; it does not create a file.
+- Auth order is `SECRIA_TOKEN` → stored device-flow session. Tokens live in the
+  OS keychain, with a `0600` file fallback.
+- The CLI reads only `SECRIA_API_URL`, `SECRIA_ZITADEL_*`, `ZITADEL_ISSUER`, and
+  `ZITADEL_CLIENT_ID` from a local `.env`; server secrets are never loaded into
+  `secria run` subprocesses.
+
 ## Environment variables
 
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Neon pooled connection string |
 | `DATABASE_URL_DIRECT` | Optional direct URL for migrations |
+| `DB_SCHEMA` | Explicit Postgres schema (default `public`) |
 | `SECRIA_MASTER_KEY` | 32-byte base64 KEK |
 | `SECRIA_MASTER_KEY_VERSION` | KEK version for rotation |
 | `APP_SECRET` | Signs the OAuth handshake cookie |
@@ -145,8 +185,15 @@ uv run --directory server alembic revision --autogenerate -m "change"
 | `ZITADEL_CLIENT_ID` | PKCE public client / device-flow client |
 | `ZITADEL_REDIRECT_URI` | Web callback URL |
 | `ZITADEL_POST_LOGOUT_URI` | Post-logout landing page |
+| `ZITADEL_API_AUDIENCE` | Optional access-token audience for CLI bearer auth |
 | `APP_URL` | Public web URL used in invite links |
 | `WEB_ORIGIN` | Allowed CORS origin |
+| `SECRIA_SESSION_COOKIE_NAME` | Web session cookie (default `secria_session`) |
+| `SESSION_TTL_DAYS` | Rolling session lifetime (default 30) |
+| `COOKIE_SECURE` | Secure cookie flag; `true` in production |
+| `RATE_LIMIT_ENABLED` | Enable request rate limits |
+| `ENVIRONMENT` | `development` or `production` (JSON logs) |
+| `LOG_LEVEL` | structlog level |
 | `RESEND_API_KEY` | Email delivery; empty = log only |
 | `EMAIL_FROM`, `EMAIL_REPLY_TO`, `EMAIL_OVERRIDE_TO` | Sender + dev override |
 
@@ -169,11 +216,13 @@ See `docs/security.md` for the full checklist and key-rotation runbook.
 
 ## Status
 
-Phases 0–2 are complete: the monorepo scaffold, configuration, design
-foundation, CI, database models, baseline migration, envelope-encryption module,
-Zitadel PKCE login, server sessions, bearer-JWT validation, `/me` endpoints, and
-permission helpers are in place. The API, CLI, and web UI are built phase by
-phase; see `AGENTS.md` for the current phase and `plan.md` for the full roadmap.
+Phases 0–8 are complete: the monorepo scaffold, configuration, design
+foundation, CI, database models, baseline migration, envelope encryption,
+Zitadel PKCE login, web sessions, bearer-JWT validation, `/me`, workspace /
+project / environment / member APIs, versioned secrets with bulk upsert and
+rollback, audit logs, invites and Resend email, the Typer CLI, the full Next.js
+dashboard, scoped service tokens, and rate-limit hardening. See `AGENTS.md` for
+the phase log and `docs/local-testing.md` for a guided local walkthrough.
 
 ## License
 

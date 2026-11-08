@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -57,6 +58,7 @@ class ProjectMemberOut(BaseModel):
     role: ProjectRole
     environmentIds: list[str] | None = None
     joinedAt: int
+    source: Literal["workspace", "project"] = "project"
 
 
 class ProjectMemberPut(BaseModel):

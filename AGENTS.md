@@ -7,7 +7,7 @@ Read `plan.md` before changing the core, and keep this file current.
 ## Commands
 
 ```bash
-npm run start                 # install client + server + cli dependencies
+npm run start                 # install root, client, server, and cli dependencies
 npm run dev                   # both dev servers (api :8000, web :3000)
 uv run --directory server pytest
 uv run --directory server ruff check .
@@ -42,7 +42,27 @@ never commit it. `.env.example` documents every setting.
   `alembic check`/autogenerate reports schema-qualified FK and enum churn on
   this database; that is a known reflection false positive. Column, index, and
   table diffs are still meaningful.
-- Tests run against a throwaway schema on the configured Postgres.
+- Workspace/project/environment APIs use UUID path params. The web app and CLI
+  resolve slugs through the list endpoints; slugs are not globally unique below
+  the workspace.
+- Creating a project requires workspace owner/admin. It creates
+  `dev`/`staging`/`prod` and a wrapped project DEK in the same transaction.
+- Secret values are versioned. Unchanged bulk values do not create a version;
+  updates and restores do. `replace` soft-deletes keys missing from the payload,
+  and re-adding a deleted key restores it and continues its version numbers.
+- `SecurityHeaders` adds `Cache-Control: no-store` and `Pragma: no-cache` to
+  every `/secrets`, `/audit-logs`, and `/service-tokens` response.
+- Service tokens are project/environment-scoped. `secret_services` accepts a
+  `Principal`: a user goes through `require_project_access`; a token goes through
+  `token_services.require_service_access`, which enforces its single scope and
+  `read` vs `read_write`. Service tokens cannot call user-only routes.
+- Audit rows for token actions use `actor_type="service_token"` and the token id.
+- Rate limits live in `app/rate_limit.py` (slowapi, per client IP). The 429 body
+  is the standard `{"error": ...}` shape with `Retry-After`.
+- `docs/api.md` documents the implemented surface; update it when a router
+  changes.
+- Tests run against a throwaway schema on the configured Postgres and disable the
+  limiter after app import.
 
 ## Client invariants
 
@@ -56,7 +76,11 @@ never commit it. `.env.example` documents every setting.
   `/login?next=`.
 - Server state is TanStack Query. Do not invent a second store.
 - `app/globals.css` owns the design tokens and `sc-*` component classes. Reuse
-  them instead of adding one-off styles.
+  them instead of adding one-off styles. The dashboard layer covers the app
+  shell, project cards, tables, dialogs, menus, diffs, and the invite landing.
+- Dashboard routes: `/w/[ws]` (projects), `/w/[ws]/members`, `/w/[ws]/audit`,
+  `/w/[ws]/p/[project]` (secrets), `/access`, `/tokens`, `/settings`, and
+  `/invite/[token]`. `ProjectShell` provides the project context to its tabs.
 - The visual language is a **secure ledger**: ice-white canvas, petrol-blue
   rail/primary actions, signal lime used sparingly. It is intentionally not a
   clone of neoma-study.
@@ -76,6 +100,8 @@ never commit it. `.env.example` documents every setting.
 - CLI uses the device authorization grant and stores tokens in the OS keychain
   (file fallback at mode 0600). It sends a bearer JWT to the API.
 - Service tokens are `secria_st_<random>`; only the SHA-256 hash is stored.
+  `SECRIA_TOKEN` with that prefix switches the CLI to
+  `/api/v1/service-tokens/current` instead of the workspace list endpoints.
 - Invite and service tokens are compared with constant-time functions. An invite
   can only be accepted by a logged-in user whose verified email matches.
 - `services/permissions.py` owns workspace/project/environment role checks.
@@ -87,9 +113,12 @@ never commit it. `.env.example` documents every setting.
 - Envelope encryption: KEK from `SECRIA_MASTER_KEY` → per-project DEK →
   AES-256-GCM with a fresh 12-byte nonce and AAD
   `workspace_id:project_id:environment_id:key`.
+- `Cache-Control: no-store` on every secrets response and audit response.
+- Audit logs are workspace-owner/admin only. Metadata contains key names,
+  counts, roles, and version numbers; never values.
 - Bulk upsert is transactional and limited to 1000 keys / 64 KB per value.
-- `Cache-Control: no-store` on every secrets response.
-- Rate-limit auth-adjacent and download endpoints.
+- Rate-limit auth-adjacent, invite, reveal, download, and token-creation
+  endpoints (slowapi, per IP); tests disable the limiter.
 - Strict CORS (web origin only). HTTPS in production. Cookies HttpOnly,
   SameSite=Lax, Secure in production.
 - Rotating `SECRIA_MASTER_KEY` requires re-wrapping project DEKs; losing it makes
@@ -100,9 +129,9 @@ never commit it. `.env.example` documents every setting.
 - Phase 0: scaffold, config, design foundation, CI. **Complete.**
 - Phase 1: models, baseline migration, encryption. **Complete.**
 - Phase 2: auth/session/permissions. **Complete.**
-- Phase 3: workspaces/projects/environments/members. **Next.**
-- Phase 4: secrets/versions/audit.
-- Phase 5: invites/email.
-- Phase 6: CLI.
-- Phase 7: full web UI.
-- Phase 8: service tokens/hardening/deployment.
+- Phase 3: workspaces/projects/environments/members. **Complete.**
+- Phase 4: secrets/versions/audit. **Complete.**
+- Phase 5: invites/email. **Complete.**
+- Phase 6: CLI. **Complete.**
+- Phase 7: full web UI. **Complete.**
+- Phase 8: service tokens/hardening/deployment. **Complete.**

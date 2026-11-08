@@ -34,9 +34,28 @@ ZITADEL_POST_LOGOUT_URI=https://app.example.com/login
 APP_URL=https://app.example.com
 WEB_ORIGIN=https://app.example.com
 COOKIE_SECURE=true
+RATE_LIMIT_ENABLED=true
 RESEND_API_KEY=<key>
 EMAIL_FROM="Secria <secria@example.com>"
 ```
+
+Also set `CORS_ORIGINS` only if non-browser clients call the API directly; the
+web app uses the same-origin `/api/*` rewrite.
+
+## CLI / CI
+
+Point the CLI at the deployed API and Zitadel instance:
+
+```env
+SECRIA_API_URL=https://api.example.com
+SECRIA_ZITADEL_ISSUER=https://<instance>.zitadel.cloud
+SECRIA_ZITADEL_CLIENT_ID=<client id>
+```
+
+For CI, create a project/environment token in the dashboard or with
+`secria token create`, then expose it as `SECRIA_TOKEN`. Store it as a masked
+secret; it is shown only once. Prefer `read` tokens for deploy jobs that only
+pull configuration, and set an expiry where the platform supports one.
 
 Migrations are explicit; deploys do not run them automatically:
 
@@ -54,6 +73,14 @@ uv run --directory server alembic upgrade head
 ## Health
 
 `GET /api/health` executes `select 1`. Point the platform health check at it.
+
+## Proxy and limits
+
+Rate limits key off the client address. If the API runs behind a reverse proxy
+or load balancer, start uvicorn with `--proxy-headers` and set
+`FORWARDED_ALLOW_IPS` to the proxy address(es); otherwise every request appears
+to come from the proxy and shares one bucket. Never trust forwarded headers when
+the API is directly reachable.
 
 ## Local Postgres
 

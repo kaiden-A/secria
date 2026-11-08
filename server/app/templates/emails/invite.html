@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <body style="margin:0;padding:0;background:#f7fbfb;color:#0b2229;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7fbfb;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="width:100%;max-width:560px;background:#ffffff;border:1px solid #dce9ea;border-radius:16px;overflow:hidden;">
+            <tr>
+              <td style="background:#062a33;padding:20px 28px;">
+                <span style="font-family:'Courier New',monospace;font-size:12px;letter-spacing:0.26em;color:#f7fbfb;">SECRIA</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px 28px 28px;">
+                <p style="margin:0 0 10px;font-family:'Courier New',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5a7177;">You&rsquo;re invited</p>
+                <h1 style="margin:0 0 16px;font-size:24px;line-height:1.2;color:#062a33;">
+                  {{ inviter_name }} invited you to {{ workspace_name }}
+                </h1>
+                <p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#5a7177;">
+                  You&rsquo;ve been added as <strong style="color:#0a3a46;">{{ role }}</strong>. Open the invite to confirm your email and join the workspace.
+                </p>
+                <p style="margin:0 0 24px;">
+                  <a href="{{ invite_url }}" style="display:inline-block;background:#c7f464;color:#062a33;text-decoration:none;font-weight:700;font-size:14px;padding:13px 20px;border-radius:10px;">Open the invite</a>
+                </p>
+                {% if grants %}
+                <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#0a3a46;">Project access</p>
+                <ul style="margin:0 0 20px;padding-left:18px;font-size:14px;line-height:1.7;color:#5a7177;">
+                  {% for grant in grants %}
+                  <li><strong style="color:#0b2229;">{{ grant.project_name }}</strong> &mdash; {{ grant.role }}</li>
+                  {% endfor %}
+                </ul>
+                {% endif %}
+                <p style="margin:0 0 18px;font-size:13px;line-height:1.6;color:#5a7177;">
+                  This invite expires on {{ expires_at.strftime("%d %b %Y") }}.
+                </p>
+                <p style="margin:0;font-size:11px;line-height:1.6;color:#8aa0a5;word-break:break-all;">
+                  Button not working? Paste this link into your browser:<br>
+                  {{ invite_url }}
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#eff7f7;padding:14px 28px;font-size:11px;color:#5a7177;">
+                Secria &middot; secrets, sealed and accounted for.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
