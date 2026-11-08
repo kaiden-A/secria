@@ -1,7 +1,9 @@
 import inspect
 import json
 import os
+import platform
 import subprocess
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -12,11 +14,10 @@ from typing import Any
 
 import httpx
 import typer
-import yaml
 from rich.console import Console
 from rich.table import Table
 
-from . import __version__, auth, config, envfile
+from . import __version__, auth, config, discovery, envfile
 from .api import SecriaAPI
 from .errors import CliError
 
@@ -36,12 +37,33 @@ project_app = typer.Typer(help="Projects.", no_args_is_help=True)
 env_app = typer.Typer(help="Environments.", no_args_is_help=True)
 secrets_app = typer.Typer(help="Secrets.", no_args_is_help=True)
 token_app = typer.Typer(help="Service tokens.", no_args_is_help=True)
+config_app = typer.Typer(help="Server and identity-provider settings.", no_args_is_help=True)
 
 app.add_typer(workspace_app, name="workspace")
 app.add_typer(project_app, name="project")
 app.add_typer(env_app, name="env")
 app.add_typer(secrets_app, name="secrets")
 app.add_typer(token_app, name="token")
+app.add_typer(config_app, name="config")
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        console.print(f"secria [bold]{__version__}[/bold]")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the version and exit.",
+    ),
+) -> None:
+    """Secria secrets manager CLI."""
 
 
 @dataclass
@@ -80,7 +102,13 @@ def handle_errors(func: Callable) -> Callable:
 
 
 def _api() -> SecriaAPI:
-    return SecriaAPI(config.api_url(), auth.get_token())
+    base = config.api_url()
+    if not base:
+        raise CliError(
+            "No Secria server is configured. "
+            "Run `secria login --server https://your-server`."
+        )
+    return SecriaAPI(base, auth.get_token())
 
 
 def _link() -> dict[str, Any]:
@@ -382,15 +410,175 @@ def version() -> None:
     console.print(f"secria [bold]{__version__}[/bold]")
 
 
+@config_app.command("show")
+@handle_errors
+def config_show() -> None:
+    """Show the resolved server and identity-provider settings."""
+    table = Table(title="Secria configuration", header_style="bold")
+    table.add_column("Setting")
+    table.add_column("Value", overflow="fold")
+    table.add_column("Source")
+    table.add_row("Server", config.api_url() or "[red]not set[/red]", config.api_url_source())
+    table.add_row(
+        "Zitadel issuer",
+        config.zitadel_issuer() or "[red]not set[/red]",
+        config.zitadel_issuer_source(),
+    )
+    table.add_row(
+        "Zitadel client",
+        config.zitadel_client_id() or "[red]not set[/red]",
+        config.zitadel_client_id_source(),
+    )
+    table.add_row("Config dir", str(config.config_dir()), "-")
+    console.print(table)
+
+
+@config_app.command("set")
+@handle_errors
+def config_set(
+    key: str = typer.Argument(
+        ..., help="api-url, zitadel-issuer, or zitadel-client-id."
+    ),
+    value: str = typer.Argument(..., help="New value."),
+) -> None:
+    """Set one configuration value."""
+    config.save_setting(key, value)
+    console.print(f"Saved [bold]{key}[/bold].")
+
+
+@config_app.command("path")
+def config_path() -> None:
+    """Print the configuration directory."""
+    console.print(str(config.config_dir()))
+
+
+def _link_summary() -> tuple[str, str]:
+    path, link = config.find_link()
+    if path is None:
+        return "none", "-"
+    scope = "/".join(
+        str(link.get(key) or "?")
+        for key in ("workspace", "project", "environment")
+    )
+    return f"{path} → {scope}", "repo"
+
+
+@app.command()
+@handle_errors
+def doctor(
+    offline: bool = typer.Option(
+        False, "--offline", help="Skip API and discovery checks."
+    ),
+) -> None:
+    """Check configuration, auth, keyring, and API connectivity."""
+    server = config.api_url()
+    issuer = config.zitadel_issuer()
+    client_id = config.zitadel_client_id()
+    table = Table(title="Secria doctor", header_style="bold")
+    table.add_column("Check")
+    table.add_column("Value", overflow="fold")
+    table.add_column("Source")
+
+    runtime = f"{__version__} (Python {platform.python_version()}"
+    runtime += ", frozen)" if getattr(sys, "frozen", False) else ")"
+    table.add_row("CLI", runtime, "runtime")
+    table.add_row("Config dir", str(config.config_dir()), "-")
+    table.add_row("Server", server or "[red]not set[/red]", config.api_url_source())
+    table.add_row(
+        "Zitadel issuer",
+        issuer or "[red]not set[/red]",
+        config.zitadel_issuer_source(),
+    )
+    table.add_row(
+        "Zitadel client",
+        client_id or "[red]not set[/red]",
+        config.zitadel_client_id_source(),
+    )
+    table.add_row("Keyring", auth.keyring_backend(), "runtime")
+
+    if (os.getenv("SECRIA_TOKEN") or "").strip():
+        auth_value = "service token (SECRIA_TOKEN)"
+    else:
+        session = auth.stored_session()
+        if session is None:
+            auth_value = "not signed in"
+        else:
+            email = str(session.get("email") or "unknown user")
+            expires_at = int(session.get("expires_at") or 0)
+            expired = bool(expires_at and expires_at <= time.time())
+            auth_value = f"{email} ({'expired' if expired else 'active'})"
+    table.add_row("Auth", auth_value, "keyring/file")
+
+    link_value, link_source = _link_summary()
+    table.add_row("Link file", link_value, link_source)
+
+    if offline:
+        healthy = bool(server and issuer and client_id)
+        table.add_row("Network", "skipped (--offline)", "-")
+    elif not server:
+        healthy = False
+        table.add_row("Network", "[red]no server[/red]", "-")
+    else:
+        health_ok = False
+        discovery_ok = False
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                response = client.get(f"{server}/api/health")
+            table.add_row(
+                "API health",
+                f"HTTP {response.status_code}",
+                "network",
+            )
+            health_ok = response.status_code == 200
+        except httpx.HTTPError as exc:
+            table.add_row("API health", f"[red]{type(exc).__name__}[/red]", "network")
+        try:
+            found = discovery.fetch(server)
+            table.add_row("Discovery", found.issuer, "network")
+            discovery_ok = True
+        except CliError as exc:
+            table.add_row("Discovery", f"[red]{exc}[/red]", "network")
+        healthy = health_ok and discovery_ok
+
+    console.print(table)
+    if not healthy:
+        raise typer.Exit(1)
+
+
 @app.command()
 @handle_errors
 def login(
     browser: bool = typer.Option(
         True, "--browser/--no-browser", help="Open the verification page."
     ),
+    server: str | None = typer.Option(
+        None, "--server", help="Secria server URL (saved after a successful login)."
+    ),
 ) -> None:
     """Sign in with the Zitadel device flow."""
-    auth.device_login(open_browser=browser)
+    resolved = config.resolve_server(server)
+    if not resolved:
+        if not sys.stdin.isatty():
+            raise CliError("No Secria server configured. Pass --server https://...")
+        resolved = config.validate_server_url(typer.prompt("Secria server URL"))
+    if resolved.startswith("http://") and not config.is_local_url(resolved):
+        err_console.print(
+            "[yellow]Warning: this server is not using HTTPS.[/yellow]"
+        )
+    console.print(f"Server: [bold]{resolved}[/bold]")
+    server_config = discovery.fetch(resolved)
+    console.print(f"Identity provider: [bold]{server_config.issuer}[/bold]")
+    config.save_server_config(
+        server_config.api_url,
+        server_config.issuer,
+        server_config.client_id,
+    )
+    auth.device_login(
+        open_browser=browser,
+        issuer=server_config.issuer,
+        client_id=server_config.client_id,
+        server=server_config.api_url,
+    )
 
 
 @app.command()
@@ -443,6 +631,7 @@ def init(
         workspace=context.workspace["slug"],
         project=context.project["slug"] if context.project else "",
         environment=context.environment["slug"] if context.environment else "",
+        server=config.api_url(),
     )
     console.print(
         f"Linked [bold]{path}[/bold] → "
@@ -508,10 +697,11 @@ def pull(
         text = api.request_text("GET", base, params={"format": "env"})
     else:
         data = api.request("GET", base, params={"format": "json"})
-        if fmt == "json":
-            text = json.dumps(data, indent=2, sort_keys=True) + "\n"
-        else:
-            text = yaml.safe_dump(data, sort_keys=True)
+        text = (
+            json.dumps(data, indent=2, sort_keys=True) + "\n"
+            if fmt == "json"
+            else config.dump_yaml(data)
+        )
     envfile.write_env(path, text)
     console.print(f"Wrote [bold]{path}[/bold].")
     _warn_gitignore(path)
@@ -654,6 +844,7 @@ def project_create(
         workspace=ws["slug"],
         project=project["slug"],
         environment=environment["slug"],
+        server=config.api_url(),
     )
     console.print(
         f"Linked this directory to {ws['slug']}/{project['slug']}/{environment['slug']}."

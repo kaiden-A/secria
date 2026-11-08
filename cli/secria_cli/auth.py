@@ -4,6 +4,7 @@ import json
 import os
 import time
 import webbrowser
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -15,7 +16,7 @@ from .errors import AuthError
 
 console = Console()
 SCOPE = "openid profile email offline_access"
-TOKEN_SERVICE = "secria"
+LEGACY_TOKEN_SERVICE = "secria"
 TOKEN_USERNAME = "session"
 
 
@@ -24,17 +25,50 @@ def _keyring_enabled() -> bool:
 
 
 class TokenStore:
+    """Session storage scoped to one Secria server.
+
+    Keyring entries are `secria:<host>` so connecting to two self-hosted
+    instances cannot overwrite the same session.
+    """
+
+    def __init__(self, server: str | None = None) -> None:
+        self.host = config.current_host() if server is None else config.host_from(server)
+        self.service = config.token_service(self.host)
+
+    def _legacy_allowed(self) -> bool:
+        """Only the old single-server store may be read for the default host."""
+        return self.host == config.host_from(config.DEFAULT_API_URL)
+
+    def _path(self) -> Path:
+        path = config.credentials_path(self.host)
+        if path.is_file():
+            return path
+        if self._legacy_allowed():
+            legacy = config.legacy_credentials_path()
+            if legacy.is_file():
+                return legacy
+        return path
+
     def get(self) -> dict[str, Any] | None:
         if _keyring_enabled():
-            try:
-                raw = keyring.get_password(TOKEN_SERVICE, TOKEN_USERNAME)
+            services = (
+                (self.service, LEGACY_TOKEN_SERVICE)
+                if self._legacy_allowed()
+                else (self.service,)
+            )
+            for service in services:
+                try:
+                    raw = keyring.get_password(service, TOKEN_USERNAME)
+                except Exception:
+                    continue
                 if raw:
-                    data = json.loads(raw)
+                    try:
+                        data = json.loads(raw)
+                    except ValueError:
+                        continue
                     if isinstance(data, dict):
                         return data
-            except Exception:
-                pass
-        path = config.credentials_path()
+        path = self._path()
         if not path.is_file():
             return None
         try:
@@ -47,20 +81,46 @@ class TokenStore:
         raw = json.dumps(data)
         if _keyring_enabled():
             try:
-                keyring.set_password(TOKEN_SERVICE, TOKEN_USERNAME, raw)
+                keyring.set_password(self.service, TOKEN_USERNAME, raw)
                 with contextlib.suppress(OSError):
-                    config.credentials_path().unlink(missing_ok=True)
+                    config.credentials_path(self.host).unlink(missing_ok=True)
+                    if self._legacy_allowed():
+                        config.legacy_credentials_path().unlink(missing_ok=True)
                 return
             except Exception:
                 pass
-        config.secure_write(config.credentials_path(), raw + "\n")
+        config.secure_write(config.credentials_path(self.host), raw + "\n")
 
     def clear(self) -> None:
+        services = (
+            (self.service, LEGACY_TOKEN_SERVICE)
+            if self._legacy_allowed()
+            else (self.service,)
+        )
         if _keyring_enabled():
-            with contextlib.suppress(Exception):
-                keyring.delete_password(TOKEN_SERVICE, TOKEN_USERNAME)
-        with contextlib.suppress(OSError):
-            config.credentials_path().unlink(missing_ok=True)
+            for service in services:
+                with contextlib.suppress(Exception):
+                    keyring.delete_password(service, TOKEN_USERNAME)
+        paths = [config.credentials_path(self.host)]
+        if self._legacy_allowed():
+            paths.append(config.legacy_credentials_path())
+        for path in paths:
+            with contextlib.suppress(OSError):
+                path.unlink(missing_ok=True)
+
+
+def keyring_backend() -> str:
+    try:
+        return type(keyring.get_keyring()).__name__
+    except Exception:
+        return "unavailable"
+
+
+def stored_session() -> dict[str, Any] | None:
+    try:
+        return TokenStore().get()
+    except Exception:
+        return None
 
 
 def decode_claims(token: str | None) -> dict[str, Any]:
@@ -89,18 +149,25 @@ def _discover(issuer: str) -> dict[str, Any]:
     return data
 
 
-def _issuer_and_client() -> tuple[str, str]:
-    issuer = config.zitadel_issuer().rstrip("/")
-    client_id = config.zitadel_client_id()
-    if not issuer or not client_id:
+def _issuer_and_client(
+    issuer: str | None = None, client_id: str | None = None
+) -> tuple[str, str]:
+    resolved_issuer = (issuer or config.zitadel_issuer()).rstrip("/")
+    resolved_client = client_id or config.zitadel_client_id()
+    if not resolved_issuer or not resolved_client:
         raise AuthError(
             "ZITADEL_ISSUER and ZITADEL_CLIENT_ID are not configured. "
-            "Set them in the environment or the repository .env."
+            "Run `secria login` or set them in the environment."
         )
-    return issuer, client_id
+    return resolved_issuer, resolved_client
 
 
-def _store_tokens(issuer: str, client_id: str, response: dict[str, Any]) -> dict[str, Any]:
+def _store_tokens(
+    issuer: str,
+    client_id: str,
+    response: dict[str, Any],
+    server: str | None = None,
+) -> dict[str, Any]:
     access_token = response.get("access_token")
     if not isinstance(access_token, str) or not access_token:
         raise AuthError("The identity provider did not return an access token.")
@@ -117,12 +184,18 @@ def _store_tokens(issuer: str, client_id: str, response: dict[str, Any]) -> dict
         "email": claims.get("email"),
         "sub": claims.get("sub"),
     }
-    TokenStore().set(data)
+    TokenStore(server).set(data)
     return data
 
 
-def device_login(*, open_browser: bool = True) -> dict[str, Any]:
-    issuer, client_id = _issuer_and_client()
+def device_login(
+    *,
+    open_browser: bool = True,
+    issuer: str | None = None,
+    client_id: str | None = None,
+    server: str | None = None,
+) -> dict[str, Any]:
+    issuer, client_id = _issuer_and_client(issuer, client_id)
     discovery = _discover(issuer)
     device_endpoint = discovery.get("device_authorization_endpoint")
     token_endpoint = discovery.get("token_endpoint")
@@ -171,7 +244,7 @@ def device_login(*, open_browser: bool = True) -> dict[str, Any]:
         except (httpx.HTTPError, ValueError) as exc:
             raise AuthError("Could not complete the device login.") from exc
         if token_response.status_code == 200 and isinstance(payload, dict):
-            data = _store_tokens(issuer, client_id, payload)
+            data = _store_tokens(issuer, client_id, payload, server)
             email = data.get("email") or "your account"
             console.print(f"Signed in as [bold]{email}[/bold].")
             return data

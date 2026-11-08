@@ -17,6 +17,7 @@ from .rate_limit import limiter
 from .routers import (
     audit_router,
     auth_router,
+    config_router,
     health_router,
     invites_router,
     me_router,
@@ -148,6 +149,7 @@ def root() -> dict[str, str]:
 
 
 app.include_router(health_router.router)
+app.include_router(config_router.router)
 app.include_router(auth_router.router)
 app.include_router(me_router.router)
 app.include_router(workspaces_router.router)

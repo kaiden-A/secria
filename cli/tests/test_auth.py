@@ -18,14 +18,28 @@ def _jwt(payload: dict) -> str:
 
 def test_token_store_file_fallback(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SECRIA_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("SECRIA_API_URL", "https://api.test")
     monkeypatch.setenv("SECRIA_DISABLE_KEYRING", "1")
     store = auth.TokenStore()
     assert store.get() is None
     store.set({"access_token": "a", "id_token": "i", "expires_at": 0})
     assert store.get() == {"access_token": "a", "id_token": "i", "expires_at": 0}
-    assert (tmp_path / "credentials.json").is_file()
+    assert (tmp_path / "credentials-api.test.json").is_file()
     store.clear()
     assert store.get() is None
+
+
+def test_token_store_is_scoped_per_host(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SECRIA_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("SECRIA_DISABLE_KEYRING", "1")
+    one = auth.TokenStore("https://one.example.com")
+    two = auth.TokenStore("https://two.example.com")
+    one.set({"access_token": "one"})
+    two.set({"access_token": "two"})
+    assert one.get() == {"access_token": "one"}
+    assert two.get() == {"access_token": "two"}
+    assert (tmp_path / "credentials-one.example.com.json").is_file()
+    assert (tmp_path / "credentials-two.example.com.json").is_file()
 
 
 def test_decode_claims() -> None:

@@ -112,6 +112,22 @@ never commit it. `.env.example` documents every setting.
   Return 404 for invisible resources and 403 only when the resource is visible
   but the action is not allowed.
 
+## CLI distribution
+
+- PyPI project `secria`; import package `secria_cli`; entry point `secria`.
+  `uv tool install secria` and `uvx secria` are the primary install paths.
+- `cli/secria_cli/config.py` owns the API URL, Zitadel settings, and config
+  precedence: flag → env → saved config → `.secria.yaml` `server` → default.
+- The default API URL is the Cloud Run service. `--server` and `SECRIA_API_URL`
+  override it; self-hosted instances use those rather than editing source.
+- `GET /api/v1/config` is public and returns only `apiUrl`, `issuer`, and
+  `clientId`. `secria login` uses it, then the Zitadel device flow.
+- Tokens are keyed per server host in the OS keychain, with a `0600` file
+  fallback. An installed CLI ignores project `.env` auth endpoints; a source
+  checkout still reads the allowed keys for local development.
+- `cli/README.md` documents install, config, auth, and development. Update it
+  with any user-facing CLI change.
+
 ## Security invariants
 
 - Envelope encryption: KEK from `SECRIA_MASTER_KEY` → per-project DEK →

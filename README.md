@@ -151,27 +151,49 @@ After signing in at <http://localhost:3000>:
 
 ## CLI
 
+Install it as a global tool with uv (or `pipx install secria`):
+
 ```bash
-uv run --directory cli secria --help
-uv run --directory cli secria login
-uv run --directory cli secria init                 # link this directory
-uv run --directory cli secria push .env --env dev
-uv run --directory cli secria diff .env
-uv run --directory cli secria pull --env prod --out .env.prod --force
-uv run --directory cli secria run --env dev -- npm start
-uv run --directory cli secria secrets list
-uv run --directory cli secria secrets get DATABASE_URL
-uv run --directory cli secria token create --env prod --name ci-github
+uv tool install secria
+secria login                    # opens the browser; discovers the API config
+secria init                     # link this directory
+secria push .env --env dev
+secria diff .env
+secria pull --env prod --out .env.prod --force
+secria run --env dev -- npm start
+secria secrets list
+secria secrets get DATABASE_URL
+secria token create --env prod --name ci-github
 ```
 
+For another self-hosted instance, pass the server once:
+
+```bash
+secria login --server https://secria.example.com
+```
+
+Run it without installing, or work from the monorepo:
+
+```bash
+uvx secria --help
+uv run --directory cli secria --help
+```
+
+- `login` reads the public `GET /api/v1/config` endpoint for the Zitadel issuer
+  and client ID, then uses the device flow. Users do not type those values.
+- Settings live in the platform config directory; `secria config show` and
+  `secria doctor` explain what is resolved and from where.
 - `push` shows a key-only diff and asks before writing. `--replace` asks again.
 - `pull` refuses to overwrite without `--force` and writes mode `0600`.
 - `run` injects secrets in memory; it does not create a file.
 - Auth order is `SECRIA_TOKEN` → stored device-flow session. Tokens live in the
-  OS keychain, with a `0600` file fallback.
-- The CLI reads only `SECRIA_API_URL`, `SECRIA_ZITADEL_*`, `ZITADEL_ISSUER`, and
-  `ZITADEL_CLIENT_ID` from a local `.env`; server secrets are never loaded into
-  `secria run` subprocesses.
+  OS keychain, keyed per server host, with a `0600` file fallback.
+- An installed CLI ignores a project `.env` for auth endpoints. In a source
+  checkout it reads only `SECRIA_API_URL`, `SECRIA_ZITADEL_*`,
+  `ZITADEL_ISSUER`, and `ZITADEL_CLIENT_ID`; server secrets are never loaded
+  into `secria run` subprocesses.
+- See `cli/README.md` for the full CLI guide and `docs/api.md` for the public
+  config endpoint.
 
 ## Environment variables
 

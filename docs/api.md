@@ -4,6 +4,17 @@ Base path: `/api`. JSON errors are `{"error": "sentence"}`; validation errors ad
 `safe details` without echoing submitted values. Timestamps are integer
 milliseconds.
 
+## Public config
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/v1/config` | CLI bootstrap: public `apiUrl`, Zitadel `issuer`, and `clientId` |
+
+No authentication and no database access. The response contains only public
+OAuth values; never a client secret, token, or server setting. It is cached for
+five minutes and exists so `secria login` can discover a self-hosted instance
+from one URL.
+
 ## Auth
 
 | Method | Path | Purpose |
