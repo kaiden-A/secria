@@ -1,298 +1,603 @@
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 
 import {
+  ArrowDown,
   ArrowRight,
   Check,
-  History,
-  Layers,
   Lock,
-  Shield,
-  Terminal,
 } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { CipherDemo } from "@/components/landing/CipherDemo";
+import { CopyCommand } from "@/components/landing/CopyCommand";
+import { HeroStage } from "@/components/landing/HeroStage";
 
-const LEDGER_ROWS = [
-  { key: "DATABASE_URL", status: "synced" },
-  { key: "STRIPE_SECRET_KEY", status: "sealed" },
-  { key: "RESEND_API_KEY", status: "new" },
-  { key: "SENTRY_DSN", status: "synced" },
+const PROOF = [
+  { value: "AES-256-GCM", label: "Envelope encryption" },
+  { value: "100%", label: "Audited reveals" },
+  { value: "Self-hosted", label: "Your keys, your database" },
+  { value: ".env", label: "Push, pull, run" },
 ];
 
-const FEATURES = [
+const VAULT_LAYERS = [
   {
-    icon: Shield,
-    title: "Envelope encryption",
-    body: "A master key wraps one key per project. Secret values never leave the API in plaintext unless an authorized reveal asks for them.",
+    number: "01",
+    title: "Workspace",
+    body: "Your team’s top-level vault.",
+    tag: "Top level",
   },
   {
-    icon: Layers,
-    title: "Project-scoped access",
-    body: "Grant people exactly the projects and environments they need. Workspace admins see everything; members see their lane.",
+    number: "02",
+    title: "Project",
+    body: "One application, one key boundary.",
+    tag: "Key boundary",
   },
   {
-    icon: History,
-    title: "Every reveal is audited",
-    body: "Create, update, reveal, download, roll back. The log records who, when, where, and which key — never the value.",
+    number: "03",
+    title: "Environment",
+    body: "Dev, staging, production, and beyond.",
+    tag: "Scoped",
   },
   {
-    icon: Terminal,
-    title: "CLI-native workflow",
-    body: "Push a .env, pull it back, diff before you write, or run a command with secrets injected in memory. No stray files.",
+    number: "04",
+    title: "Secret",
+    body: "Versioned, encrypted, and accounted for.",
+    tag: "Versioned",
   },
 ];
 
-const FLOW = [
-  { n: "01", title: "Workspace", body: "Your team's top-level vault." },
-  { n: "02", title: "Project", body: "One application, one key boundary." },
-  { n: "03", title: "Environment", body: "Dev, staging, production, and beyond." },
-  { n: "04", title: "Secret", body: "Versioned, encrypted, and accounted for." },
+const INJECTED = ["DATABASE_URL", "STRIPE_SECRET_KEY", "RESEND_API_KEY"];
+
+const AUDIT_ROWS = [
+  { action: "reveal", key: "STRIPE_SECRET_KEY", actor: "you / 2m", tone: "lime" },
+  { action: "update", key: "DATABASE_URL", actor: "mia / 1h", tone: "ice" },
+  { action: "download", key: ".env / prod", actor: "ci / 3h", tone: "muted" },
 ];
+
+const ACCESS_ROWS = [
+  { role: "admin", access: [true, true, true] },
+  { role: "editor", access: [true, true, false] },
+  { role: "viewer", access: [true, false, false] },
+];
+
+const FOOTER_COLUMNS = [
+  {
+    title: "Product",
+    links: [
+      { label: "How it works", href: "#how" },
+      { label: "Security", href: "#security" },
+      { label: "CLI", href: "#cli" },
+    ],
+  },
+  {
+    title: "Source",
+    links: [
+      { label: "GitHub", href: "https://github.com/kaiden-A/secria", external: true },
+      {
+        label: "API docs",
+        href: "https://github.com/kaiden-A/secria/blob/main/docs/api.md",
+        external: true,
+      },
+      {
+        label: "Deploy",
+        href: "https://github.com/kaiden-A/secria#setup",
+        external: true,
+      },
+    ],
+  },
+  {
+    title: "Access",
+    links: [
+      { label: "Sign in", href: "/login" },
+      { label: "Open the vault", href: "/login" },
+      { label: "Security model", href: "#security" },
+    ],
+  },
+];
+
+export const metadata: Metadata = {
+  title: "Secrets in focus",
+  description:
+    "Secria is a self-hosted secrets manager with envelope encryption, project-scoped access, audited reveals, and a CLI-native workflow.",
+  openGraph: {
+    type: "website",
+    siteName: "Secria",
+    title: "Secria / Secrets in focus",
+    description:
+      "Envelope-encrypted values, project-scoped access, and an audit trail that records the action, never the value.",
+  },
+};
+
+export const viewport: Viewport = {
+  colorScheme: "dark",
+  themeColor: "#061d24",
+};
 
 export default function LandingPage() {
   return (
     <div className="sc-landing">
-      <header className="sc-nav">
-        <Link href="/" className="sc-brand" aria-label="Secria home">
-          <Logo size={32} />
-          <span className="sc-brand-word">SECRIA</span>
-        </Link>
-        <nav className="sc-nav-links" aria-label="Primary">
-          <a className="sc-nav-link" href="#how">
-            How it works
-          </a>
-          <a className="sc-nav-link" href="#security">
-            Security
-          </a>
-          <ThemeToggle />
-          <Link className="sc-btn sc-btn--primary sc-btn--small" href="/login">
-            Sign in
-            <ArrowRight size={15} />
+      <a className="sc-l-skip" href="#main">
+        Skip to content
+      </a>
+
+      <header className="sc-l-nav">
+        <div className="sc-l-wrap sc-l-nav-inner">
+          <Link href="/" className="sc-brand sc-l-brand" aria-label="Secria home">
+            <Logo size={28} />
+            <span className="sc-brand-word">SECRIA</span>
           </Link>
-        </nav>
+
+          <nav className="sc-l-nav-links" aria-label="Primary">
+            <a href="#how">How it works</a>
+            <a href="#security">Security</a>
+            <a href="#cli">CLI</a>
+          </nav>
+
+          <div className="sc-l-nav-actions">
+            <span className="sc-l-nav-pill">
+              <i className="sc-l-dot" aria-hidden="true" />
+              Self-hosted
+            </span>
+            <Link className="sc-l-nav-signin" href="/login">
+              Sign in
+            </Link>
+            <Link
+              className="sc-btn sc-btn--lime sc-btn--small sc-l-nav-cta"
+              href="/login"
+            >
+              Open the vault
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
       </header>
 
-      <main>
-        <section className="sc-hero">
-          <div className="sc-hero-copy">
-            <p className="sc-eyebrow">
-              <span className="sc-signal-dot" aria-hidden="true" />
-              Self-hosted secrets
-            </p>
-            <h1>
-              Ship secrets without <span className="sc-mark">shipping them.</span>
+      <main id="main">
+        <section className="sc-l-hero" aria-labelledby="hero-title">
+          <div className="sc-l-wrap">
+            <h1 id="hero-title" className="sc-l-hero-title">
+              Secrets in focus.
             </h1>
-            <p className="sc-lede">
-              Secria is the vault your team actually owns. Envelope-encrypted values,
-              project-scoped access, version history, and an honest audit trail — all behind
-              one FastAPI service and a CLI that fits your terminal.
+            <p className="sc-l-hero-lede">
+              Envelope-encrypted values, project-scoped access, and an audit trail
+              that records the action, never the value. Self-hosted, CLI-native, and
+              yours.
             </p>
-            <div className="sc-actions">
-              <Link className="sc-btn sc-btn--primary sc-btn--lg" href="/login">
+
+            <HeroStage />
+
+            <div className="sc-l-actions sc-l-hero-actions">
+              <Link className="sc-btn sc-btn--lime sc-btn--lg" href="/login">
                 Open the vault
                 <ArrowRight size={17} />
               </Link>
-              <a className="sc-btn sc-btn--ghost sc-btn--lg" href="#how">
-                See how it works
+              <a className="sc-btn sc-btn--lg sc-l-btn-ghost" href="#security">
+                See the encryption
+                <ArrowDown size={16} />
               </a>
             </div>
-            <dl className="sc-proof">
-              <div>
-                <dt>AES-256-GCM</dt>
-                <dd>envelope encryption</dd>
-              </div>
-              <div>
-                <dt>100%</dt>
-                <dd>audited reveals</dd>
-              </div>
-              <div>
-                <dt>.env</dt>
-                <dd>push / pull / run</dd>
-              </div>
-            </dl>
-          </div>
 
-          <div className="sc-hero-visual" aria-hidden="true">
-            <div className="sc-visual-grid" />
-            <div className="sc-ledger">
-              <div className="sc-ledger-top">
-                <span className="sc-ledger-dots">
-                  <i />
-                  <i />
-                  <i />
-                </span>
-                <span className="sc-mono">acme-api / production</span>
-                <span className="sc-sealed">
-                  <Lock size={12} />
-                  sealed
-                </span>
-              </div>
-              <div className="sc-ledger-tabs">
-                <span>dev</span>
-                <span>staging</span>
-                <span className="is-active">production</span>
-              </div>
-              <div className="sc-ledger-rows">
-                {LEDGER_ROWS.map((row) => (
-                  <div className="sc-ledger-row" key={row.key}>
-                    <span className="sc-ledger-key">{row.key}</span>
-                    <span className="sc-ledger-value">••••••••••••</span>
-                    <span
-                      className={`sc-ledger-status${row.status === "new" ? " is-new" : ""}`}
-                    >
-                      {row.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="sc-ledger-foot">
-                <span>
-                  <Check size={13} /> 14 secrets in sync
-                </span>
-                <span className="sc-mono">v42</span>
-              </div>
-            </div>
-
-            <div className="sc-float-card sc-float-card--audit">
-              <span className="sc-signal-dot" />
-              <div>
-                <strong>revealed</strong>
-                <span>STRIPE_SECRET_KEY · 2m ago</span>
-              </div>
-            </div>
-            <div className="sc-float-card sc-float-card--cli">
-              <span className="sc-prompt">$</span>
-              <code>secria run --env prod -- npm start</code>
+            <div className="sc-l-hero-foot">
+              <span>(01) / Self-hosted secrets</span>
+              <span>Fig. 01 / Envelope encryption</span>
+              <a href="#how">
+                Scroll
+                <ArrowDown size={13} />
+              </a>
             </div>
           </div>
         </section>
 
-        <section id="how" className="sc-flow">
-          <div className="sc-section-head">
-            <p className="sc-eyebrow">The shape of the vault</p>
-            <h2>Four layers. One clear path.</h2>
-            <p>
-              No mystery boxes. Every secret has a home, every permission has a scope, and
-              every change has a witness.
-            </p>
-          </div>
-          <div className="sc-flow-grid">
-            {FLOW.map((step) => (
-              <div className="sc-flow-step" key={step.n}>
-                <span className="sc-flow-num">{step.n}</span>
-                <h3>{step.title}</h3>
-                <p>{step.body}</p>
+        <section className="sc-l-proof" aria-label="Security guarantees">
+          <div className="sc-l-wrap sc-l-proof-inner">
+            {PROOF.map((item) => (
+              <div className="sc-l-proof-item" key={item.value}>
+                <span className="sc-l-proof-value">{item.value}</span>
+                <span className="sc-l-proof-label">{item.label}</span>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="sc-features">
-          <div className="sc-section-head">
-            <p className="sc-eyebrow">Built for the way teams ship</p>
-            <h2>Small surface. Hard guarantees.</h2>
-            <p>
-              Secria does one job: keep secret values out of the wrong hands and make the
-              right hands faster.
-            </p>
-          </div>
-          <div className="sc-feature-grid">
-            {FEATURES.map((feature) => (
-              <article className="sc-feature" key={feature.title}>
-                <span className="sc-feature-icon">
-                  <feature.icon size={20} />
-                </span>
-                <h3>{feature.title}</h3>
-                <p>{feature.body}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section id="security" className="sc-security">
-          <div className="sc-security-panel">
-            <p className="sc-eyebrow sc-eyebrow--on-dark">
-              <span className="sc-signal-dot" aria-hidden="true" />
-              Sealed by default
-            </p>
-            <h2>Plaintext has one address: the API.</h2>
-            <p>
-              The web app never decrypts. The database never sees a raw secret. The master
-              key lives outside both, and the ciphertext is bound to its exact workspace,
-              project, environment, and key.
-            </p>
-            <ul className="sc-security-list">
-              <li>
-                <Check size={16} />
-                AES-256-GCM with a fresh nonce per version
-              </li>
-              <li>
-                <Check size={16} />
-                Project keys wrapped by the master key
-              </li>
-              <li>
-                <Check size={16} />
-                Reveal and download always audited
-              </li>
-            </ul>
-          </div>
-
-          <div className="sc-security-copy">
-            <p className="sc-eyebrow">The key chain</p>
-            <h2>Three locks, one direction.</h2>
-            <p>
-              A leaked database backup is not a leaked secret. Without the master key, the
-              project keys are noise, and without a project key, the values are noise.
-            </p>
-            <div className="sc-keychain">
-              <div className="sc-keychain-row">
-                <span>Master key</span>
-                <code>KEK · env only</code>
-              </div>
-              <div className="sc-keychain-arrow">wraps</div>
-              <div className="sc-keychain-row">
-                <span>Project key</span>
-                <code>DEK · one per project</code>
-              </div>
-              <div className="sc-keychain-arrow">encrypts</div>
-              <div className="sc-keychain-row">
-                <span>Secret value</span>
-                <code>AES-256-GCM</code>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="sc-cta">
-          <div className="sc-cta-inner">
-            <div>
-              <p className="sc-eyebrow sc-eyebrow--on-dark">Ready when you are</p>
-              <h2>Your .env deserves a better home.</h2>
+        <section id="how" className="sc-l-paper">
+          <div className="sc-l-wrap">
+            <div className="sc-l-split-head">
+              <h2>Four layers. One key path.</h2>
               <p>
-                Bring your workspace, your projects, and your team. Secria handles the
-                seals, the versions, and the receipts.
+                No mystery boxes. Every secret has a home, every permission has a
+                scope, and every change has a witness.
               </p>
             </div>
-            <Link className="sc-btn sc-btn--lime sc-btn--lg" href="/login">
-              Open the vault
-              <ArrowRight size={17} />
-            </Link>
+
+            <ol className="sc-l-vault">
+              {VAULT_LAYERS.map((layer) => (
+                <li className="sc-l-vault-row" key={layer.number}>
+                  <span className="sc-l-vault-number">{layer.number}</span>
+                  <div className="sc-l-vault-copy">
+                    <h3>{layer.title}</h3>
+                    <p>{layer.body}</p>
+                  </div>
+                  <span className="sc-l-vault-tag">{layer.tag}</span>
+                </li>
+              ))}
+            </ol>
+
+            <div className="sc-l-section-foot">
+              <span>Fig. 02 / Vault model</span>
+              <span>Every secret inherits one path. No orphans.</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="product" className="sc-l-product">
+          <div className="sc-l-wrap">
+            <div className="sc-l-split-head">
+              <h2>Small surface. Hard guarantees.</h2>
+              <p>
+                The product is deliberately narrow. The guarantees are not.
+              </p>
+            </div>
+
+            <div className="sc-l-bento">
+              <article className="sc-l-artifact sc-l-cli" id="cli">
+                <div className="sc-l-artifact-bar">
+                  <span className="sc-l-window-dots" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span className="sc-l-artifact-name">secria / zsh</span>
+                  <span className="sc-l-tag">Sample session</span>
+                  <CopyCommand command="secria run --env prod -- npm start" />
+                </div>
+
+                <div className="sc-l-terminal" translate="no">
+                  <p className="sc-l-term-line">
+                    <span className="sc-l-term-prompt">$</span> secria run --env
+                    prod -- npm start
+                  </p>
+                  <p className="sc-l-term-out">
+                    <Check size={13} />
+                    14 secrets injected
+                  </p>
+                  <p className="sc-l-term-out">
+                    <Check size={13} />
+                    0 files written to disk
+                  </p>
+                  <p className="sc-l-term-out sc-l-term-out--lime">
+                    <ArrowRight size={13} />
+                    local: http://localhost:3000
+                  </p>
+
+                  <div className="sc-l-term-diff">
+                    <p className="sc-l-term-line">
+                      <span className="sc-l-term-prompt">$</span> secria diff --env
+                      prod
+                    </p>
+                    <p className="sc-l-term-out sc-l-term-out--muted">
+                      <span className="sc-l-term-mark">~</span>
+                      3 values changed
+                    </p>
+                    <p className="sc-l-term-out sc-l-term-out--muted">
+                      <span className="sc-l-term-mark">+</span>
+                      1 new key
+                    </p>
+                    <p className="sc-l-term-cursor" aria-hidden="true">
+                      <span />
+                    </p>
+                  </div>
+                </div>
+
+                <div className="sc-l-injected">
+                  <span className="sc-l-injected-label">Injected</span>
+                  <ul>
+                    {INJECTED.map((key) => (
+                      <li key={key}>
+                        <Lock size={11} />
+                        {key}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </article>
+
+              <article className="sc-l-artifact sc-l-audit">
+                <header className="sc-l-artifact-head">
+                  <h3>Audit log</h3>
+                  <span className="sc-l-tag">Sample</span>
+                </header>
+
+                <div className="sc-l-audit-table">
+                  <div className="sc-l-audit-row sc-l-audit-row--head">
+                    <span>Action</span>
+                    <span>Key</span>
+                    <span>Who</span>
+                  </div>
+                  {AUDIT_ROWS.map((row) => (
+                    <div className="sc-l-audit-row" key={`${row.action}-${row.key}`}>
+                      <span className={`sc-l-action is-${row.tone}`}>
+                        {row.action}
+                      </span>
+                      <code translate="no">{row.key}</code>
+                      <span>{row.actor}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <footer className="sc-l-artifact-foot">
+                  <span>
+                    <Lock size={12} />
+                    Values never logged
+                  </span>
+                  <span>v42 / 18 versions</span>
+                </footer>
+              </article>
+
+              <article className="sc-l-artifact sc-l-access">
+                <header className="sc-l-artifact-head">
+                  <h3>Project access</h3>
+                  <span className="sc-l-tag">Sample</span>
+                </header>
+
+                <table
+                  className="sc-l-access-table"
+                  aria-label="Project access by role and environment"
+                >
+                  <thead>
+                    <tr>
+                      <th scope="col">Role</th>
+                      <th scope="col">dev</th>
+                      <th scope="col">stg</th>
+                      <th scope="col">prod</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ACCESS_ROWS.map((row) => (
+                      <tr key={row.role}>
+                        <th scope="row">{row.role}</th>
+                        {row.access.map((allowed, index) => (
+                          <td key={`${row.role}-${index}`}>
+                            <span
+                              className={`sc-l-cell${allowed ? " is-on" : ""}`}
+                              aria-hidden="true"
+                            />
+                            <span className="sc-sr-only">
+                              {allowed ? "Allowed" : "Not allowed"}
+                            </span>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <footer className="sc-l-artifact-foot">
+                  <span>Project-scoped</span>
+                  <span>Environment-aware</span>
+                </footer>
+              </article>
+            </div>
+
+            <div className="sc-l-cli-handoff">
+              <div>
+                <h3>The same vault, in your terminal.</h3>
+                <p>
+                  Install the CLI, sign in, then push, pull, or diff. Run any
+                  command with secrets injected in memory, so no .env is written to
+                  disk.
+                </p>
+              </div>
+              <div className="sc-l-cli-install">
+                <div className="sc-l-cli-install-row">
+                  <span className="sc-l-cli-install-label">Install</span>
+                  <code translate="no">uv tool install secria</code>
+                  <CopyCommand command="uv tool install secria" />
+                </div>
+                <div className="sc-l-cli-install-row sc-l-cli-install-row--sub">
+                  <span className="sc-l-cli-install-label">One-off</span>
+                  <code translate="no">uvx secria</code>
+                </div>
+                <div className="sc-l-cli-install-row sc-l-cli-install-row--sub">
+                  <span className="sc-l-cli-install-label">Start</span>
+                  <code translate="no">secria login</code>
+                </div>
+              </div>
+            </div>
+
+            <div className="sc-l-section-foot">
+              <span>Fig. 03 / Product surface</span>
+              <span>No dashboard theatre. Every screen does one job.</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="security" className="sc-l-security">
+          <div className="sc-l-wrap">
+            <div className="sc-l-split-head">
+              <h2>Plaintext has one address.</h2>
+              <p>
+                The web app never decrypts. The database never sees a raw value. The
+                master key lives outside both, and every ciphertext is bound to its
+                workspace, project, environment, and key.
+              </p>
+            </div>
+
+            <div className="sc-l-security-grid">
+              <div className="sc-l-security-left">
+                <div className="sc-l-keychain" aria-label="Key hierarchy">
+                  <div className="sc-l-key-row">
+                    <span className="sc-l-key-index">01</span>
+                    <div>
+                      <strong>Master key</strong>
+                      <span>KEK / environment only</span>
+                    </div>
+                    <code translate="no">SECRIA_MASTER_KEY</code>
+                  </div>
+                  <div className="sc-l-key-link" aria-hidden="true">
+                    <span>wraps</span>
+                  </div>
+                  <div className="sc-l-key-row">
+                    <span className="sc-l-key-index">02</span>
+                    <div>
+                      <strong>Project key</strong>
+                      <span>DEK / one per project</span>
+                    </div>
+                    <code translate="no">projects.encrypted_dek</code>
+                  </div>
+                  <div className="sc-l-key-link" aria-hidden="true">
+                    <span>encrypts</span>
+                  </div>
+                  <div className="sc-l-key-row">
+                    <span className="sc-l-key-index">03</span>
+                    <div>
+                      <strong>Secret value</strong>
+                      <span>AES-256-GCM / nonce per version</span>
+                    </div>
+                    <code translate="no">secrets.ciphertext</code>
+                  </div>
+                </div>
+
+                <ul className="sc-l-bullets">
+                  <li>
+                    <Check size={16} />
+                    AES-256-GCM with a fresh nonce per version
+                  </li>
+                  <li>
+                    <Check size={16} />
+                    Project keys wrapped by the master key
+                  </li>
+                  <li>
+                    <Check size={16} />
+                    Reveal and download always audited
+                  </li>
+                </ul>
+              </div>
+
+              <CipherDemo />
+            </div>
+
+            <div className="sc-l-section-foot">
+              <span>Fig. 04 / Key chain</span>
+              <span>Plaintext never touches the browser.</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="sc-l-cta">
+          <div className="sc-l-wrap sc-l-cta-inner">
+            <div className="sc-l-cta-copy">
+              <h2>Your .env deserves a better home.</h2>
+              <p>
+                Bring your workspace, your projects, and your team. Secria handles
+                the seals, the versions, and the receipts.
+              </p>
+              <div className="sc-l-actions">
+                <Link className="sc-btn sc-btn--lime sc-btn--lg" href="/login">
+                  Open the vault
+                  <ArrowRight size={17} />
+                </Link>
+                <a className="sc-btn sc-btn--lg sc-l-btn-ghost" href="#security">
+                  Read the security model
+                </a>
+              </div>
+            </div>
+
+            <div className="sc-l-stamp" aria-hidden="true">
+              <svg className="sc-l-stamp-ring" viewBox="0 0 260 260">
+                <defs>
+                  <path
+                    id="sc-l-stamp-path"
+                    d="M130,130 m-98,0 a98,98 0 1,1 196,0 a98,98 0 1,1 -196,0"
+                  />
+                </defs>
+                <circle
+                  cx="130"
+                  cy="130"
+                  r="126"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeOpacity="0.58"
+                />
+                <circle
+                  cx="130"
+                  cy="130"
+                  r="90"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeOpacity="0.42"
+                  strokeDasharray="2 7"
+                />
+                <text className="sc-l-stamp-text">
+                  <textPath href="#sc-l-stamp-path" startOffset="0">
+                    SECRIA / SEALED / AUDITED / SELF-HOSTED / SECURE LEDGER /
+                  </textPath>
+                </text>
+              </svg>
+              <span className="sc-l-stamp-mark">
+                <Logo size={54} />
+              </span>
+            </div>
+          </div>
+
+          <div className="sc-l-wrap">
+            <div className="sc-l-section-foot">
+              <span>Fig. 05 / The seal</span>
+              <span>Self-hosted / your keys / no lock-in</span>
+            </div>
           </div>
         </section>
       </main>
 
-      <footer className="sc-footer">
-        <div className="sc-footer-inner">
-          <Link href="/" className="sc-brand sc-brand--small">
-            <Logo size={26} />
-            <span className="sc-brand-word">SECRIA</span>
-          </Link>
-          <p className="sc-mono">Secrets, sealed and accounted for.</p>
-          <nav className="sc-footer-links" aria-label="Footer">
-            <a href="#how">How it works</a>
-            <a href="#security">Security</a>
-            <Link href="/login">Sign in</Link>
-          </nav>
+      <footer className="sc-l-footer">
+        <div className="sc-l-wrap">
+          <div className="sc-l-footer-grid">
+            <div className="sc-l-footer-brand">
+              <Link
+                href="/"
+                className="sc-brand sc-l-brand"
+                aria-label="Secria home"
+              >
+                <Logo size={26} />
+                <span className="sc-brand-word">SECRIA</span>
+              </Link>
+              <p>Secrets, sealed and accounted for.</p>
+              <span className="sc-l-footer-note">Self-hosted / your keys</span>
+            </div>
+
+            {FOOTER_COLUMNS.map((column) => (
+              <div className="sc-l-footer-column" key={column.title}>
+                <h2>{column.title}</h2>
+                <ul>
+                  {column.links.map((link) =>
+                    "external" in link && link.external ? (
+                      <li key={link.label}>
+                        <a
+                          href={link.href}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {link.label}
+                        </a>
+                      </li>
+                    ) : (
+                      <li key={link.label}>
+                        <Link href={link.href}>{link.label}</Link>
+                      </li>
+                    ),
+                  )}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          <div className="sc-l-footer-bottom">
+            <span>© 2026 Secria</span>
+            <span>Secure ledger / rev. 01</span>
+            <span className="sc-l-footer-status">
+              <i className="sc-l-dot" aria-hidden="true" />
+              Self-hosted
+            </span>
+          </div>
         </div>
       </footer>
     </div>

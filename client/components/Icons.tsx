@@ -118,3 +118,20 @@ export function Globe(props: IconProps) {
     </Svg>
   );
 }
+
+export function Eye(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M2.8 12S6.2 5.8 12 5.8 21.2 12 21.2 12 17.8 18.2 12 18.2 2.8 12 2.8 12Z" />
+      <circle cx="12" cy="12" r="2.9" />
+    </Svg>
+  );
+}
+
+export function ArrowDown(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 5v14M6 13l6 6 6-6" />
+    </Svg>
+  );
+}
