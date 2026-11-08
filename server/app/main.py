@@ -42,7 +42,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Secria API",
-    version="0.1.0",
+    version="0.1.1",
     description="secrets manager API powered by elysiaa.",
     lifespan=lifespan,
 )
