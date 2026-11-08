@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: secria_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/secria_test?sslmode=disable
+      DB_SCHEMA: public
+      APP_SECRET: ci-only-secret
+      SECRIA_MASTER_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      SECRIA_MASTER_KEY_VERSION: "1"
+      ZITADEL_ISSUER: https://example.zitadel.cloud
+      ZITADEL_CLIENT_ID: ci-client
+      ZITADEL_REDIRECT_URI: http://localhost:3000/api/auth/callback
+      ZITADEL_POST_LOGOUT_URI: http://localhost:3000/login
+      WEB_ORIGIN: http://localhost:3000
+      RATE_LIMIT_ENABLED: "false"
+      ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --directory server --frozen
+      - run: uv run --directory server ruff check .
+      - run: uv run --directory server pyright
+      - run: uv run --directory server pytest
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci --prefix client
+      - run: npm --prefix client run lint
+      - run: npm --prefix client run typecheck
+      - run: npm --prefix client run build
+        env:
+          API_ORIGIN: http://localhost:8000
+
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --directory cli --frozen
+      - run: uv run --directory cli ruff check .
+      - run: uv run --directory cli pyright
+      - run: uv run --directory cli pytest

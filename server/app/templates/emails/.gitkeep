@@ -1,0 +1,1 @@
+# Email templates live here so the Docker build bakes them into the image.

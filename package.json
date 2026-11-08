@@ -1,0 +1,19 @@
+{
+  "name": "secria",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Secria — self-hosted secrets manager",
+  "scripts": {
+    "start": "npm --prefix client install && uv sync --directory server && uv sync --directory cli",
+    "dev": "concurrently --kill-others --names api,web --prefix-colors cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "uv run --directory server uvicorn app.main:app --reload --port 8000",
+    "dev:web": "npm --prefix client run dev",
+    "test": "uv run --directory server pytest && uv run --directory cli pytest",
+    "lint": "uv run --directory server ruff check . && uv run --directory cli ruff check . && npm --prefix client run lint",
+    "typecheck": "uv run --directory server pyright && uv run --directory cli pyright && npm --prefix client run typecheck",
+    "build": "npm --prefix client run build"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

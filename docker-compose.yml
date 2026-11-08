@@ -1,0 +1,23 @@
+# Optional local Postgres for development. The app defaults to Neon from .env;
+# point DATABASE_URL at this service when you want a fully local database:
+#   postgresql://secria:secria@localhost:5433/secria?sslmode=disable
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: secria-postgres
+    environment:
+      POSTGRES_USER: secria
+      POSTGRES_PASSWORD: secria
+      POSTGRES_DB: secria
+    ports:
+      - "5433:5432"
+    volumes:
+      - secria_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U secria -d secria"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  secria_pgdata:
