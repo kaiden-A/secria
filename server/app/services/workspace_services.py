@@ -229,12 +229,16 @@ def update_member_role(
     actor_member = require_workspace_admin(db, actor, workspace_id)
     target = _target_member(db, workspace_id, member_id)
 
-    if target.role == WorkspaceRole.owner or patch.role == WorkspaceRole.owner:
-        if actor_member.role != WorkspaceRole.owner:
-            raise ForbiddenError("Only a workspace owner can manage owners.")
-    if target.role == WorkspaceRole.owner and patch.role != WorkspaceRole.owner:
-        if _owner_count(db, workspace_id) <= 1:
-            raise ConflictError("A workspace must keep at least one owner.")
+    if (
+        target.role == WorkspaceRole.owner or patch.role == WorkspaceRole.owner
+    ) and actor_member.role != WorkspaceRole.owner:
+        raise ForbiddenError("Only a workspace owner can manage owners.")
+    if (
+        target.role == WorkspaceRole.owner
+        and patch.role != WorkspaceRole.owner
+        and _owner_count(db, workspace_id) <= 1
+    ):
+        raise ConflictError("A workspace must keep at least one owner.")
 
     target.role = patch.role
     db.commit()

@@ -12,7 +12,13 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .config import get_settings
 from .logging_config import configure_logging
-from .routers import auth_router, health_router, me_router
+from .routers import (
+    auth_router,
+    health_router,
+    me_router,
+    projects_router,
+    workspaces_router,
+)
 from .services.errors import ServiceError
 
 settings = get_settings()
@@ -119,3 +125,5 @@ def root() -> dict[str, str]:
 app.include_router(health_router.router)
 app.include_router(auth_router.router)
 app.include_router(me_router.router)
+app.include_router(workspaces_router.router)
+app.include_router(projects_router.router)
