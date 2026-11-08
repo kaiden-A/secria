@@ -44,6 +44,7 @@ jobs:
 
       # 4. Build and push Docker image
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./server
@@ -65,7 +66,9 @@ jobs:
         with:
           service: ${{ env.CLOUD_RUN_SERVICE }}
           region: ${{ env.GCP_REGION }}
-          image: ${{ env.DOCKERHUB_IMAGE }}:${{ steps.tag.outputs.IMAGE_TAG }}
+          # Pin the digest: Cloud Run's Docker Hub mirror can lag behind a
+          # freshly pushed tag even though the digest is already available.
+          image: ${{ env.DOCKERHUB_IMAGE }}@${{ steps.build.outputs.digest }}
 
       # 7. Print the deployed URL
       - name: Show deployed URL
