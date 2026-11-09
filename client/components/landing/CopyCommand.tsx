@@ -4,7 +4,13 @@ import { useEffect, useRef, useState } from "react";
 
 import { Check, Copy } from "@/components/Icons";
 
-export function CopyCommand({ command }: { command: string }) {
+export function CopyCommand({
+  command,
+  label = "Copy the CLI command",
+}: {
+  command: string;
+  label?: string;
+}) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -30,7 +36,7 @@ export function CopyCommand({ command }: { command: string }) {
       type="button"
       className="sc-l-copy"
       onClick={handleCopy}
-      aria-label={copied ? "Command copied" : "Copy the CLI command"}
+      aria-label={copied ? "Copied" : label}
     >
       {copied ? <Check size={13} /> : <Copy size={13} />}
       <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>

@@ -11,6 +11,8 @@ import { Logo } from "@/components/Logo";
 import { CipherDemo } from "@/components/landing/CipherDemo";
 import { CopyCommand } from "@/components/landing/CopyCommand";
 import { HeroStage } from "@/components/landing/HeroStage";
+import { MarketingFooter } from "@/components/site/MarketingFooter";
+import { MarketingHeader } from "@/components/site/MarketingHeader";
 
 const PROOF = [
   { value: "AES-256-GCM", label: "Envelope encryption" },
@@ -60,41 +62,6 @@ const ACCESS_ROWS = [
   { role: "viewer", access: [true, false, false] },
 ];
 
-const FOOTER_COLUMNS = [
-  {
-    title: "Product",
-    links: [
-      { label: "How it works", href: "#how" },
-      { label: "Security", href: "#security" },
-      { label: "CLI", href: "#cli" },
-    ],
-  },
-  {
-    title: "Source",
-    links: [
-      { label: "GitHub", href: "https://github.com/kaiden-A/secria", external: true },
-      {
-        label: "API docs",
-        href: "https://github.com/kaiden-A/secria/blob/main/docs/api.md",
-        external: true,
-      },
-      {
-        label: "Deploy",
-        href: "https://github.com/kaiden-A/secria#setup",
-        external: true,
-      },
-    ],
-  },
-  {
-    title: "Access",
-    links: [
-      { label: "Sign in", href: "/login" },
-      { label: "Open the vault", href: "/login" },
-      { label: "Security model", href: "#security" },
-    ],
-  },
-];
-
 export const metadata: Metadata = {
   title: "Secrets in focus",
   description:
@@ -120,37 +87,7 @@ export default function LandingPage() {
         Skip to content
       </a>
 
-      <header className="sc-l-nav">
-        <div className="sc-l-wrap sc-l-nav-inner">
-          <Link href="/" className="sc-brand sc-l-brand" aria-label="Secria home">
-            <Logo size={28} />
-            <span className="sc-brand-word">SECRIA</span>
-          </Link>
-
-          <nav className="sc-l-nav-links" aria-label="Primary">
-            <a href="#how">How it works</a>
-            <a href="#security">Security</a>
-            <a href="#cli">CLI</a>
-          </nav>
-
-          <div className="sc-l-nav-actions">
-            <span className="sc-l-nav-pill">
-              <i className="sc-l-dot" aria-hidden="true" />
-              Self-hosted
-            </span>
-            <Link className="sc-l-nav-signin" href="/login">
-              Sign in
-            </Link>
-            <Link
-              className="sc-btn sc-btn--lime sc-btn--small sc-l-nav-cta"
-              href="/login"
-            >
-              Open the vault
-              <ArrowRight size={14} />
-            </Link>
-          </div>
-        </div>
-      </header>
+      <MarketingHeader active="home" />
 
       <main id="main">
         <section className="sc-l-hero" aria-labelledby="hero-title">
@@ -386,6 +323,10 @@ export default function LandingPage() {
                   command with secrets injected in memory, so no .env is written to
                   disk.
                 </p>
+                <Link className="sc-l-inline-link" href="/cli-docs">
+                  Read the full CLI guide
+                  <ArrowRight size={13} />
+                </Link>
               </div>
               <div className="sc-l-cli-install">
                 <div className="sc-l-cli-install-row">
@@ -548,58 +489,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="sc-l-footer">
-        <div className="sc-l-wrap">
-          <div className="sc-l-footer-grid">
-            <div className="sc-l-footer-brand">
-              <Link
-                href="/"
-                className="sc-brand sc-l-brand"
-                aria-label="Secria home"
-              >
-                <Logo size={26} />
-                <span className="sc-brand-word">SECRIA</span>
-              </Link>
-              <p>Secrets, sealed and accounted for.</p>
-              <span className="sc-l-footer-note">Self-hosted / your keys</span>
-            </div>
-
-            {FOOTER_COLUMNS.map((column) => (
-              <div className="sc-l-footer-column" key={column.title}>
-                <h2>{column.title}</h2>
-                <ul>
-                  {column.links.map((link) =>
-                    "external" in link && link.external ? (
-                      <li key={link.label}>
-                        <a
-                          href={link.href}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {link.label}
-                        </a>
-                      </li>
-                    ) : (
-                      <li key={link.label}>
-                        <Link href={link.href}>{link.label}</Link>
-                      </li>
-                    ),
-                  )}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          <div className="sc-l-footer-bottom">
-            <span>© 2026 Secria</span>
-            <span>Secure ledger / rev. 01</span>
-            <span className="sc-l-footer-status">
-              <i className="sc-l-dot" aria-hidden="true" />
-              Self-hosted
-            </span>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }

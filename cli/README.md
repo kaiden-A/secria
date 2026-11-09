@@ -3,6 +3,10 @@
 Push, pull, diff, and run with secrets from a
 [Secria](https://github.com/kaiden-A/secria) server.
 
+A scenario-first walkthrough, the full command reference, CI recipes, and
+troubleshooting live at
+[secria.elysiaa.com/cli-docs](https://secria.elysiaa.com/cli-docs).
+
 ## Install
 
 ```bash
