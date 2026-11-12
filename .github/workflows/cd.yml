@@ -1,13 +1,5 @@
 name: CD Pipeline
 
-# Same deploy shape as neoma-study and solace-garden: build the FastAPI image
-# from ./server, push it to Docker Hub, and deploy the new tag to Cloud Run.
-# The client deploys through Vercel's git integration; only API changes trigger
-# this workflow.
-#
-# Deploys never run migrations. Run `alembic upgrade head` explicitly against
-# the target database.
-
 on:
   push:
     branches:
@@ -44,7 +36,6 @@ jobs:
 
       # 4. Build and push Docker image
       - name: Build and push Docker image
-        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./server
@@ -61,14 +52,11 @@ jobs:
 
       # 6. Deploy to Cloud Run
       - name: Deploy to Cloud Run
-        id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.CLOUD_RUN_SERVICE }}
           region: ${{ env.GCP_REGION }}
-          # Pin the digest: Cloud Run's Docker Hub mirror can lag behind a
-          # freshly pushed tag even though the digest is already available.
-          image: ${{ env.DOCKERHUB_IMAGE }}@${{ steps.build.outputs.digest }}
+          image: ${{ env.DOCKERHUB_IMAGE }}:${{ steps.tag.outputs.IMAGE_TAG }}
 
       # 7. Print the deployed URL
       - name: Show deployed URL
