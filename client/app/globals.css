@@ -4403,6 +4403,12 @@ html:has(.sc-landing)::-webkit-scrollbar-thumb {
   font-size: 0.78rem;
 }
 
+.sc-select:disabled,
+.sc-textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .sc-select {
   width: 100%;
   min-height: 42px;
@@ -5220,14 +5226,7 @@ html:has(.sc-landing)::-webkit-scrollbar-thumb {
   padding-top: 16px;
 }
 
-/* ---------- import ---------- */
-.sc-import-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
+/* ---------- import / copy ---------- */
 .sc-filebtn {
   position: relative;
   overflow: hidden;
@@ -5240,7 +5239,111 @@ html:has(.sc-landing)::-webkit-scrollbar-thumb {
   cursor: pointer;
 }
 
+.sc-segmented {
+  display: inline-flex;
+  width: 100%;
+  padding: 3px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+}
+
+.sc-segmented button {
+  flex: 1 1 0;
+  min-height: 32px;
+  padding: 5px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sc-segmented button:hover {
+  color: var(--ink);
+}
+
+.sc-segmented button.is-active {
+  background: var(--card);
+  color: var(--heading);
+  box-shadow:
+    inset 0 0 0 1px var(--rule),
+    0 1px 3px rgba(6, 42, 51, 0.12);
+}
+
+.sc-segmented button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.sc-import-drop {
+  padding: 12px;
+  background: var(--paper);
+  border: 1px dashed var(--rule-strong);
+  border-radius: 12px;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.sc-import-drop.is-dragging {
+  background: var(--lime-soft);
+  border-color: var(--petrol);
+}
+
+.sc-import-drophead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.sc-import-dropicon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  background: var(--petrol-soft);
+  border-radius: 9px;
+  color: var(--petrol);
+}
+
+.sc-import-drophead > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sc-import-drophead strong {
+  display: block;
+  overflow: hidden;
+  font-size: 0.8rem;
+  color: var(--heading);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sc-import-drophead p {
+  margin-top: 2px;
+  font-size: 0.68rem;
+  color: var(--ink-muted);
+}
+
+.sc-import-drophead .sc-btn {
+  flex: 0 0 auto;
+}
+
+.sc-import-drop .sc-textarea {
+  min-height: 150px;
+  background: var(--card);
+}
+
 .sc-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 12px 14px;
   background: var(--paper-2);
   border: 1px solid var(--rule);
@@ -5257,7 +5360,6 @@ html:has(.sc-landing)::-webkit-scrollbar-thumb {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  margin-top: 10px;
   font-family: var(--font-mono);
   font-size: 0.68rem;
   color: var(--ink-muted);
@@ -5267,14 +5369,85 @@ html:has(.sc-landing)::-webkit-scrollbar-thumb {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  overflow-wrap: anywhere;
 }
 
 .sc-diff-keys span {
-  min-width: 62px;
+  flex: 0 0 104px;
   font-size: 0.6rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--petrol);
+}
+
+.sc-diff-keys p.sc-diff-empty {
+  color: var(--ink-muted);
+  font-family: var(--font-sans);
+  font-size: 0.74rem;
+}
+
+.sc-diff-note {
+  padding-top: 9px;
+  border-top: 1px solid var(--rule);
+  font-size: 0.68rem;
+  color: var(--ink-muted);
+}
+
+.sc-copy-route {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 10px;
+}
+
+.sc-copy-swap {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 42px;
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.sc-copy-swap:hover {
+  background: var(--petrol-soft);
+  border-color: var(--petrol);
+  color: var(--petrol);
+}
+
+.sc-copy-swap:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.sc-copy-swap:disabled:hover {
+  background: var(--paper);
+  border-color: var(--rule-strong);
+  color: var(--ink-muted);
+}
+
+.sc-copy-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  background: var(--paper-2);
+  border: 1px dashed var(--rule-strong);
+  border-radius: 10px;
+  color: var(--ink-muted);
+}
+
+.sc-copy-placeholder svg {
+  flex: 0 0 auto;
+  color: var(--petrol);
+}
+
+.sc-copy-placeholder p {
+  font-size: 0.74rem;
+  line-height: 1.5;
 }
 
 /* ---------- grants ---------- */
@@ -5748,6 +5921,23 @@ html:has(.sc-landing)::-webkit-scrollbar-thumb {
 
   .sc-grid-2 {
     grid-template-columns: 1fr;
+  }
+
+  .sc-copy-route {
+    grid-template-columns: 1fr;
+  }
+
+  .sc-copy-swap {
+    width: 100%;
+    height: 36px;
+  }
+
+  .sc-import-drophead {
+    flex-wrap: wrap;
+  }
+
+  .sc-diff-keys span {
+    flex-basis: 100%;
   }
 
   .sc-settings-grid {

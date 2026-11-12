@@ -24,6 +24,7 @@ limiter = Limiter(
 # Auth-adjacent limits are intentionally tight; reads are generous.
 AUTH_LIMIT = "30/minute"
 DOWNLOAD_LIMIT = "60/minute"
+COPY_LIMIT = "30/minute"
 REVEAL_LIMIT = "120/minute"
 INVITE_CREATE_LIMIT = "20/hour"
 INVITE_RESEND_LIMIT = "10/hour"

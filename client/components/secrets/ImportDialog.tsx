@@ -1,28 +1,36 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { FileUp, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { FileUp, TriangleAlert } from "lucide-react";
+import { useMemo, useState } from "react";
+import type { DragEvent } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/bits";
+import { DiffSummary } from "@/components/secrets/DiffSummary";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiPost, apiPut } from "@/lib/api-client";
 import { envPayload, parseEnvText, sha256Map } from "@/lib/env";
-import type { BulkResult, DiffResult } from "@/lib/types";
+import type { BulkResult, DiffResult, Environment } from "@/lib/types";
 
 export function ImportDialog({
   projectId,
   environmentId,
+  environments,
   open,
   onOpenChange,
+  onImported,
 }: {
   projectId: string;
   environmentId: string;
+  environments: Environment[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onImported?: (environment: Environment) => void;
 }) {
+  const [targetId, setTargetId] = useState(environmentId);
   const [text, setText] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [dragging, setDragging] = useState(false);
   const [mode, setMode] = useState<"merge" | "replace">("merge");
   const [diff, setDiff] = useState<DiffResult | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -30,7 +38,20 @@ export function ImportDialog({
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const base = `/api/v1/projects/${projectId}/environments/${environmentId}/secrets`;
+  const target = environments.find((item) => item.id === targetId) ?? environments[0];
+  const keyCount = useMemo(() => {
+    if (!text.trim()) return 0;
+    return Object.keys(parseEnvText(text)).length;
+  }, [text]);
+
+  if (!target) return null;
+
+  const base = `/api/v1/projects/${projectId}/environments/${target.id}/secrets`;
+
+  function resetPreview() {
+    setDiff(null);
+    setError(null);
+  }
 
   async function preview(): Promise<boolean> {
     const values = parseEnvText(text);
@@ -79,13 +100,14 @@ export function ImportDialog({
         secrets: envPayload(values),
       });
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["secrets", projectId, environmentId] }),
+        queryClient.invalidateQueries({ queryKey: ["secrets", projectId, target.id] }),
         queryClient.invalidateQueries({ queryKey: ["audit"] }),
       ]);
       toast.success(
-        `Pushed ${result.added + result.updated} changes (${result.added} added, ${result.updated} updated).`,
+        `Imported ${result.added + result.updated} changes into ${target.name} (${result.added} added, ${result.updated} updated).`,
       );
       onOpenChange(false);
+      onImported?.(target);
     } catch (cause) {
       const message =
         cause instanceof Error ? cause.message : "Could not import the secrets.";
@@ -101,10 +123,17 @@ export function ImportDialog({
     const reader = new FileReader();
     reader.onload = () => {
       setText(String(reader.result ?? ""));
-      setDiff(null);
-      setError(null);
+      setFileName(file.name);
+      resetPreview();
     };
     reader.readAsText(file);
+  }
+
+  function onDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragging(false);
+    if (previewing || busy) return;
+    loadFile(event.dataTransfer.files?.[0]);
   }
 
   return (
@@ -113,67 +142,121 @@ export function ImportDialog({
         <DialogHeader>
           <DialogTitle>Import .env</DialogTitle>
           <DialogDescription>
-            Paste a .env file or choose one. Import compares keys and hashes first; values never leave
-            the request body until you confirm.
+            Choose where the secrets land, then preview the diff. Values are only written when you
+            confirm.
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
-          <div className="sc-import-head">
-            <label className="sc-btn sc-btn--ghost sc-btn--small sc-filebtn">
-              <FileUp size={15} /> Choose file
-              <input
-                type="file"
-                accept=".env,text/plain"
-                onChange={(event) => loadFile(event.target.files?.[0])}
-              />
+          <div className="sc-grid-2">
+            <label className="sc-field">
+              <span className="sc-label">Import into</span>
+              <select
+                className="sc-select"
+                value={target.id}
+                disabled={previewing || busy}
+                onChange={(event) => {
+                  setTargetId(event.target.value);
+                  resetPreview();
+                }}
+              >
+                {environments.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
             </label>
-            <select
-              className="sc-select sc-select--sm"
-              value={mode}
-              onChange={(event) => {
-                setMode(event.target.value as "merge" | "replace");
-                setDiff(null);
-                setError(null);
-              }}
-              aria-label="Import mode"
-            >
-              <option value="merge">Merge</option>
-              <option value="replace">Replace</option>
-            </select>
+            <div className="sc-field">
+              <span className="sc-label">Mode</span>
+              <div className="sc-segmented" role="group" aria-label="Import mode">
+                <button
+                  type="button"
+                  className={mode === "merge" ? "is-active" : ""}
+                  aria-pressed={mode === "merge"}
+                  disabled={previewing || busy}
+                  onClick={() => setMode("merge")}
+                >
+                  Merge
+                </button>
+                <button
+                  type="button"
+                  className={mode === "replace" ? "is-active" : ""}
+                  aria-pressed={mode === "replace"}
+                  disabled={previewing || busy}
+                  onClick={() => setMode("replace")}
+                >
+                  Replace
+                </button>
+              </div>
+              <p className="sc-help">
+                {mode === "merge"
+                  ? "Add and update keys; keep keys that only exist in the destination."
+                  : "Mirror the file; soft-delete destination keys missing from it."}
+              </p>
+            </div>
           </div>
-          <textarea
-            className="sc-textarea sc-textarea--code"
-            value={text}
-            onChange={(event) => {
-              setText(event.target.value);
-              setDiff(null);
-              setError(null);
+
+          <div
+            className={`sc-import-drop${dragging ? " is-dragging" : ""}`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (!previewing && !busy) setDragging(true);
             }}
-            rows={10}
-            placeholder={"DATABASE_URL=postgres://...\nAPI_KEY=...\n# comments are ignored"}
-            spellCheck={false}
-          />
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setDragging(false);
+              }
+            }}
+            onDrop={onDrop}
+          >
+            <div className="sc-import-drophead">
+              <span className="sc-import-dropicon">
+                <FileUp size={18} />
+              </span>
+              <div>
+                <strong>{fileName || "Drop a .env file here"}</strong>
+                <p>
+                  {keyCount
+                    ? `${keyCount} key${keyCount === 1 ? "" : "s"} detected`
+                    : "or paste the contents below"}
+                </p>
+              </div>
+              <label className="sc-btn sc-btn--ghost sc-btn--small sc-filebtn">
+                Choose file
+                <input
+                  type="file"
+                  accept=".env,text/plain"
+                  disabled={previewing || busy}
+                  onChange={(event) => {
+                    loadFile(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            <textarea
+              className="sc-textarea sc-textarea--code"
+              value={text}
+              disabled={previewing || busy}
+              onChange={(event) => {
+                setText(event.target.value);
+                setFileName("");
+                resetPreview();
+              }}
+              rows={9}
+              placeholder={"DATABASE_URL=postgres://...\nAPI_KEY=...\n# comments are ignored"}
+              spellCheck={false}
+              aria-label=".env contents"
+            />
+          </div>
+
           {mode === "replace" ? (
             <div className="sc-notice sc-notice--warn">
-              <Sparkles size={16} />
-              <span>Replace will soft-delete remote keys that are not in this file.</span>
+              <TriangleAlert size={16} />
+              <span>Replace will soft-delete destination keys that are not in this file.</span>
             </div>
           ) : null}
-          {diff ? (
-            <div className="sc-diff">
-              <div className="sc-diff-counts">
-                <Badge tone="lime">+{diff.added.length} added</Badge>
-                <Badge tone="petrol">~{diff.changed.length} changed</Badge>
-                <Badge tone="danger">-{diff.removed.length} removed</Badge>
-                <Badge tone="muted">={diff.unchanged.length} unchanged</Badge>
-              </div>
-              <div className="sc-diff-keys">
-                {diff.added.length ? <p><span>Added</span> {diff.added.join(", ")}</p> : null}
-                {diff.changed.length ? <p><span>Changed</span> {diff.changed.join(", ")}</p> : null}
-                {diff.removed.length ? <p><span>Removed</span> {diff.removed.join(", ")}</p> : null}
-              </div>
-            </div>
-          ) : null}
+          {diff ? <DiffSummary diff={diff} mode={mode} targetName={target.name} /> : null}
           {error ? (
             <p className="sc-error" role="alert">
               {error}
@@ -196,7 +279,7 @@ export function ImportDialog({
               : previewing
                 ? "Comparing…"
                 : diff
-                  ? "Import secrets"
+                  ? `Import into ${target.name}`
                   : "Preview diff"}
           </button>
         </DialogFooter>

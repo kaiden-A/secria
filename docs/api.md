@@ -80,6 +80,8 @@ every environment; with rows, only those environment IDs.
 | PUT | `/v1/projects/{projectId}/environments/{environmentId}/secrets` | Bulk upsert (`merge` or `replace`) |
 | GET | `/v1/projects/{projectId}/environments/{environmentId}/secrets/download?format=env\|json` | Plaintext download; audited |
 | POST | `/v1/projects/{projectId}/environments/{environmentId}/secrets/diff` | Compare local keys + SHA-256 hashes |
+| POST | `/v1/projects/{projectId}/environments/{environmentId}/secrets/copy/preview` | Compare a source environment to this one |
+| POST | `/v1/projects/{projectId}/environments/{environmentId}/secrets/copy` | Copy a source environment into this one |
 | GET | `/v1/projects/{projectId}/environments/{environmentId}/secrets/{key}` | Reveal one value; audited |
 | DELETE | `/v1/projects/{projectId}/environments/{environmentId}/secrets/{key}` | Soft delete; audited |
 | GET | `/v1/projects/{projectId}/environments/{environmentId}/secrets/{key}/versions` | Version metadata |
@@ -93,6 +95,15 @@ every environment; with rows, only those environment IDs.
 - Download format `env` quotes values that need it; `json` returns an object.
 - Diff accepts `{ "secrets": [{ "key": "A", "valueSha256": "..." }] }` and
   returns `added`, `changed`, `removed`, and `unchanged` key lists.
+- Copy takes `{ "sourceEnvironmentId": "...", "mode": "merge" }`. Both
+  environments must belong to the same project; the caller needs read access to
+  the source and editor/admin on the destination. Values are decrypted and
+  re-encrypted with the destination environment's AAD, so ciphertext is never
+  reused across environments.
+- Copy uses the same `merge`/`replace` semantics as bulk upsert, is capped at
+  1000 keys, and audits `secret.copied` with the source slug and key counts.
+  Its preview is audited as `secret.diffed` with the source slug.
+- Copy requires a user session; service tokens cannot read across environments.
 - Every secrets response and audit response is `Cache-Control: no-store`; so is
   every service-token response.
 
@@ -143,8 +154,8 @@ roles, never secret values.
   other project or environment return 404; write requests with a `read` token
   return 403.
 - Service tokens can use the secrets list/reveal/download/diff endpoints and,
-  with `read_write`, bulk upsert, delete, and rollback. They cannot use `/me`,
-  workspace/project/member routes, or create/revoke tokens.
+  with `read_write`, bulk upsert, delete, and rollback. They cannot use copy,
+  `/me`, workspace/project/member routes, or create/revoke tokens.
 - `GET /v1/service-tokens/current` returns workspace/project/environment IDs and
   slugs so the CLI can resolve a context without a user session.
 - Creation and revocation are audited with `actorType: "service_token"` on

@@ -2,6 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowRightLeft,
   Copy,
   Download,
   Eye,
@@ -18,6 +19,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { CopyDialog } from "@/components/secrets/CopyDialog";
 import { DownloadDialog } from "@/components/secrets/DownloadDialog";
 import { ImportDialog } from "@/components/secrets/ImportDialog";
 import { SecretDialog } from "@/components/secrets/SecretDialog";
@@ -41,12 +43,16 @@ export function SecretTable({
   projectId,
   projectSlug,
   environment,
+  environments,
   role,
+  onEnvironmentChange,
 }: {
   projectId: string;
   projectSlug: string;
   environment: Environment;
+  environments: Environment[];
   role: ProjectRole;
+  onEnvironmentChange: (environment: Environment) => void;
 }) {
   const secrets = useSecrets(projectId, environment.id);
   const queryClient = useQueryClient();
@@ -54,6 +60,7 @@ export function SecretTable({
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const [editor, setEditor] = useState<{ secret: Secret | null } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [versionsSecret, setVersionsSecret] = useState<Secret | null>(null);
   const [deleteSecret, setDeleteSecret] = useState<Secret | null>(null);
@@ -146,6 +153,11 @@ export function SecretTable({
           {canWrite ? (
             <button type="button" className="sc-btn sc-btn--ghost sc-btn--small" onClick={() => setImportOpen(true)}>
               <FileUp size={15} /> Import .env
+            </button>
+          ) : null}
+          {canWrite && environments.length > 1 ? (
+            <button type="button" className="sc-btn sc-btn--ghost sc-btn--small" onClick={() => setCopyOpen(true)}>
+              <ArrowRightLeft size={15} /> Copy to…
             </button>
           ) : null}
           <button type="button" className="sc-btn sc-btn--ghost sc-btn--small" onClick={() => setDownloadOpen(true)}>
@@ -261,7 +273,11 @@ export function SecretTable({
         <EmptyState
           icon={<KeyRound size={24} />}
           title={search ? "No matching keys" : `No secrets in ${environment.name}`}
-          body={search ? "Try a different search." : "Add the first key or import an existing .env."}
+          body={
+            search
+              ? "Try a different search."
+              : "Add the first key, import an .env, or copy from another environment."
+          }
           action={
             !search && canWrite ? (
               <button type="button" className="sc-btn sc-btn--primary" onClick={() => setEditor({ secret: null })}>
@@ -292,8 +308,20 @@ export function SecretTable({
         <ImportDialog
           projectId={projectId}
           environmentId={environment.id}
+          environments={environments}
           open
           onOpenChange={(open) => !open && setImportOpen(false)}
+          onImported={onEnvironmentChange}
+        />
+      ) : null}
+      {copyOpen ? (
+        <CopyDialog
+          projectId={projectId}
+          environment={environment}
+          environments={environments}
+          open
+          onOpenChange={(open) => !open && setCopyOpen(false)}
+          onCopied={onEnvironmentChange}
         />
       ) : null}
       <DownloadDialog

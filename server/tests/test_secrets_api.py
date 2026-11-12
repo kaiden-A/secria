@@ -36,6 +36,20 @@ def _diff(client, project, environment, secrets):
     return client.post(f"{_path(project, environment)}/diff", json={"secrets": secrets})
 
 
+def _copy_preview(client, project, environment, source):
+    return client.post(
+        f"{_path(project, environment)}/copy/preview",
+        json={"sourceEnvironmentId": str(source.id)},
+    )
+
+
+def _copy(client, project, environment, source, mode: str = "merge"):
+    return client.post(
+        f"{_path(project, environment)}/copy",
+        json={"sourceEnvironmentId": str(source.id), "mode": mode},
+    )
+
+
 def _secret(db, environment, key: str) -> Secret:
     row = db.scalar(
         select(Secret).where(Secret.environment_id == environment.id, Secret.key == key)
@@ -460,6 +474,141 @@ def test_audit_log_filters_cursor_and_no_value_leakage(
     add_workspace_member(workspace, member, WorkspaceRole.member)
     sign_in(member)
     assert client.get(audit_path).status_code == 403
+
+
+def test_copy_preview_and_merge_between_environments(
+    client, sign_in, make_user, make_workspace, make_project, db
+) -> None:
+    owner = make_user(db)
+    workspace = make_workspace(owner)
+    project, envs = make_project(workspace)
+    dev, _staging, prod = envs
+    sign_in(owner)
+    _upsert(
+        client,
+        project,
+        dev,
+        [
+            {"key": "SHARED", "value": "same"},
+            {"key": "CHANGED", "value": "dev-value"},
+            {"key": "DEV_ONLY", "value": "dev-only"},
+        ],
+    )
+    _upsert(
+        client,
+        project,
+        prod,
+        [
+            {"key": "SHARED", "value": "same"},
+            {"key": "CHANGED", "value": "prod-value"},
+            {"key": "PROD_ONLY", "value": "prod-only"},
+        ],
+    )
+
+    preview = _copy_preview(client, project, prod, dev)
+    assert preview.status_code == 200, preview.text
+    assert preview.headers["cache-control"] == "no-store"
+    assert preview.json() == {
+        "added": ["DEV_ONLY"],
+        "changed": ["CHANGED"],
+        "removed": ["PROD_ONLY"],
+        "unchanged": ["SHARED"],
+    }
+
+    copied = _copy(client, project, prod, dev)
+    assert copied.status_code == 200, copied.text
+    assert copied.json() == {"added": 1, "updated": 1, "removed": 0, "unchanged": 1}
+    assert [row["key"] for row in _list(client, project, prod).json()] == [
+        "CHANGED",
+        "DEV_ONLY",
+        "PROD_ONLY",
+        "SHARED",
+    ]
+    assert _reveal(client, project, prod, "CHANGED").json()["value"] == "dev-value"
+    assert [version.version for version in _versions(db, prod, "CHANGED")] == [1, 2]
+    assert [version.version for version in _versions(db, prod, "SHARED")] == [1]
+
+    dev_ciphertext = _versions(db, dev, "CHANGED")[-1].ciphertext
+    prod_ciphertext = _versions(db, prod, "CHANGED")[-1].ciphertext
+    assert dev_ciphertext != prod_ciphertext
+
+    preview_audit = db.scalar(select(AuditLog).where(AuditLog.action == "secret.diffed"))
+    assert preview_audit is not None
+    assert preview_audit.meta["sourceEnvironment"] == "dev"
+
+    audit = db.scalar(select(AuditLog).where(AuditLog.action == "secret.copied"))
+    assert audit is not None
+    assert audit.meta["sourceEnvironment"] == "dev"
+    assert audit.meta["added"] == 1
+    assert audit.meta["updated"] == 1
+    assert "dev-value" not in str(audit.meta)
+
+
+def test_copy_replace_mirrors_source_and_soft_deletes_target_only_keys(
+    client, sign_in, make_user, make_workspace, make_project, db
+) -> None:
+    owner = make_user(db)
+    workspace = make_workspace(owner)
+    project, envs = make_project(workspace)
+    dev, _staging, prod = envs
+    sign_in(owner)
+    _upsert(client, project, dev, [{"key": "KEEP", "value": "from-dev"}])
+    _upsert(
+        client,
+        project,
+        prod,
+        [{"key": "KEEP", "value": "old"}, {"key": "EXTRA", "value": "prod-only"}],
+    )
+
+    copied = _copy(client, project, prod, dev, mode="replace")
+    assert copied.status_code == 200, copied.text
+    assert copied.json() == {"added": 0, "updated": 1, "removed": 1, "unchanged": 0}
+    assert [row["key"] for row in _list(client, project, prod).json()] == ["KEEP"]
+    assert _reveal(client, project, prod, "KEEP").json()["value"] == "from-dev"
+    assert _secret(db, prod, "EXTRA").deleted_at is not None
+
+
+def test_copy_rejects_same_environment_viewers_and_restricted_targets(
+    client,
+    sign_in,
+    make_user,
+    make_workspace,
+    make_project,
+    add_workspace_member,
+    add_project_member,
+    db,
+) -> None:
+    owner = make_user(db)
+    workspace = make_workspace(owner)
+    project, envs = make_project(workspace)
+    dev, _staging, prod = envs
+    sign_in(owner)
+    _upsert(client, project, dev, [{"key": "DEV", "value": "dev"}])
+
+    assert _copy(client, project, dev, dev).status_code == 422
+    assert _copy_preview(client, project, dev, dev).status_code == 422
+
+    _other_project, other_envs = make_project(workspace, name="Other")
+    assert _copy(client, project, prod, other_envs[0]).status_code == 404
+
+    viewer = make_user(db)
+    add_workspace_member(workspace, viewer, WorkspaceRole.member)
+    add_project_member(project, viewer, ProjectRole.viewer)
+    sign_in(viewer)
+    assert _copy_preview(client, project, prod, dev).status_code == 200
+    assert _copy(client, project, prod, dev).status_code == 403
+
+    restricted = make_user(db)
+    add_workspace_member(workspace, restricted, WorkspaceRole.member)
+    add_project_member(
+        project,
+        restricted,
+        ProjectRole.editor,
+        environment_ids=[dev.id],
+    )
+    sign_in(restricted)
+    assert _copy(client, project, prod, dev).status_code == 404
+    assert _copy_preview(client, project, prod, dev).status_code == 404
 
 
 def test_format_env_quotes_only_what_needs_quoting() -> None:

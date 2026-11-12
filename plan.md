@@ -154,7 +154,7 @@ Key behaviours
 • /w/[ws]: projects list, create project
 • /w/[ws]/members: members and pending invites, invite dialog with per-project role checklist
 • /w/[ws]/audit: filterable audit log
-• /w/[ws]/p/[project]: environment tabs; secrets table with masked values, click-to-reveal (audited), inline edit, bulk import/export .env, version history, rollback
+• /w/[ws]/p/[project]: environment tabs; secrets table with masked values, click-to-reveal (audited), inline edit, bulk import/export .env into a chosen environment, server-side copy between environments with diff preview, version history, rollback
 • /w/[ws]/p/[project]/access: who can access this project and their role
 • /w/[ws]/p/[project]/tokens: service tokens
 • /settings: CLI sessions, personal info

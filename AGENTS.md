@@ -50,6 +50,10 @@ never commit it. `.env.example` documents every setting.
 - Secret values are versioned. Unchanged bulk values do not create a version;
   updates and restores do. `replace` soft-deletes keys missing from the payload,
   and re-adding a deleted key restores it and continues its version numbers.
+- Cross-environment copy is server-side: the source is decrypted and
+  re-encrypted with the destination AAD. It requires read on the source and
+  editor/admin on the destination, stays within one project, and is user-only.
+  Audit `secret.copied` records the source slug and counts, never values.
 - `SecurityHeaders` adds `Cache-Control: no-store` and `Pragma: no-cache` to
   every `/secrets`, `/audit-logs`, and `/service-tokens` response.
 - Service tokens are project/environment-scoped. `secret_services` accepts a
@@ -78,6 +82,9 @@ never commit it. `.env.example` documents every setting.
 - `app/globals.css` owns the design tokens and `sc-*` component classes. Reuse
   them instead of adding one-off styles. The dashboard layer covers the app
   shell, project cards, tables, dialogs, menus, diffs, and the invite landing.
+- `ImportDialog` can target any accessible environment; `CopyDialog` copies a
+  source environment into a destination through the server-side copy endpoints.
+  Both preview a mode-aware diff before writing and switch to the destination.
 - Theme is `data-theme="light|dark"` on `<html>`, defaulting to
   `prefers-color-scheme` and persisted in `localStorage["secria-theme"]`.
   `ThemeToggle` is the only setter; use semantic tokens (`--heading`,

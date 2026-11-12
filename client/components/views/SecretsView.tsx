@@ -20,6 +20,10 @@ function SecretsPanel() {
     project.environments.find((item) => item.slug === "dev") ??
     project.environments[0];
 
+  function showEnvironment(next: Environment) {
+    router.replace(`${pathname}?env=${next.slug}`, { scroll: false });
+  }
+
   if (!environment) {
     return (
       <EmptyState
@@ -41,7 +45,7 @@ function SecretsPanel() {
               role="tab"
               aria-selected={item.id === environment.id}
               className={`sc-envtab${item.id === environment.id ? " is-active" : ""}`}
-              onClick={() => router.replace(`${pathname}?env=${item.slug}`, { scroll: false })}
+              onClick={() => showEnvironment(item)}
             >
               {item.name}
             </button>
@@ -56,7 +60,9 @@ function SecretsPanel() {
         projectId={project.id}
         projectSlug={project.slug}
         environment={environment}
+        environments={project.environments}
         role={project.role}
+        onEnvironmentChange={showEnvironment}
       />
     </div>
   );

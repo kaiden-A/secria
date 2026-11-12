@@ -188,6 +188,24 @@ def test_service_token_cannot_use_user_endpoints(
         "/api/v1/workspaces", headers={"Authorization": "Bearer secria_st_bogus"}
     ).status_code == 401
 
+    # Copying between environments needs a user session.
+    assert (
+        client.post(
+            f"{_secrets_path(project, envs[0])}/copy",
+            json={"sourceEnvironmentId": str(envs[1].id)},
+            headers=_bearer(raw),
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            f"{_secrets_path(project, envs[0])}/copy/preview",
+            json={"sourceEnvironmentId": str(envs[1].id)},
+            headers=_bearer(raw),
+        ).status_code
+        == 401
+    )
+
     # Service tokens cannot mint or revoke other service tokens.
     assert client.get(_tokens_path(project, envs[0]), headers=_bearer(raw)).status_code == 401
     assert (

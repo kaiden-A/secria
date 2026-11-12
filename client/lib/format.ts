@@ -72,6 +72,7 @@ const ACTION_LABELS: Record<string, string> = {
   "secret.downloaded": "Secrets downloaded",
   "secret.diffed": "Secrets compared",
   "secret.bulk_upserted": "Secrets pushed",
+  "secret.copied": "Secrets copied",
   "secret.rolled_back": "Secret rolled back",
   "invite.created": "Invite created",
   "invite.updated": "Invite updated",

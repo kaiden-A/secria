@@ -1,3 +1,4 @@
+import uuid
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -59,6 +60,11 @@ class DiffResult(BaseModel):
     changed: list[str]
     removed: list[str]
     unchanged: list[str]
+
+
+class CopySecretsRequest(BaseModel):
+    sourceEnvironmentId: uuid.UUID
+    mode: Literal["merge", "replace"] = "merge"
 
 
 class RollbackRequest(BaseModel):

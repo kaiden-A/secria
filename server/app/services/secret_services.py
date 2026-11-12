@@ -12,8 +12,10 @@ from ..schemas.secrets import (
     BulkSecretInput,
     BulkUpsertRequest,
     BulkUpsertResult,
+    CopySecretsRequest,
     DiffRequest,
     DiffResult,
+    DiffSecretInput,
     RollbackRequest,
     SecretOut,
     SecretValueOut,
@@ -301,6 +303,7 @@ def diff_secrets(
     request: DiffRequest,
     *,
     context: AuditContext | None = None,
+    source_environment: Environment | None = None,
 ) -> DiffResult:
     access, environment = _access(db, principal, project_id, environment_id)
     if len(request.secrets) > MAX_SECRETS:
@@ -341,6 +344,17 @@ def diff_secrets(
         for key in set(local) & set(remote)
         if local[key] is not None and local[key] == remote[key]
     )
+    metadata: dict = {
+        "added": len(added),
+        "changed": len(changed),
+        "removed": len(removed),
+        "unchanged": len(unchanged),
+        "addedKeys": _audit_keys(added),
+        "changedKeys": _audit_keys(changed),
+        "removedKeys": _audit_keys(removed),
+    }
+    if source_environment is not None:
+        metadata["sourceEnvironment"] = source_environment.slug
     _record(
         db,
         principal,
@@ -348,15 +362,7 @@ def diff_secrets(
         environment,
         action="secret.diffed",
         target=f"environment:{environment.slug}",
-        metadata={
-            "added": len(added),
-            "changed": len(changed),
-            "removed": len(removed),
-            "unchanged": len(unchanged),
-            "addedKeys": _audit_keys(added),
-            "changedKeys": _audit_keys(changed),
-            "removedKeys": _audit_keys(removed),
-        },
+        metadata=metadata,
         context=context,
     )
     db.commit()
@@ -368,6 +374,121 @@ def diff_secrets(
     )
 
 
+def _decrypt_environment(
+    db: DbSession,
+    access: ProjectAccess,
+    environment: Environment,
+) -> list[BulkSecretInput]:
+    rows = db.execute(
+        select(Secret, SecretVersion)
+        .outerjoin(SecretVersion, SecretVersion.id == Secret.current_version_id)
+        .where(Secret.environment_id == environment.id, Secret.deleted_at.is_(None))
+        .order_by(Secret.key)
+    ).all()
+    if len(rows) > MAX_SECRETS:
+        raise InvalidError("At most 1000 secrets can be copied at once.")
+    dek_cache: dict[int, bytes] = {}
+    inputs: list[BulkSecretInput] = []
+    for secret, version in rows:
+        if version is None:
+            raise UnavailableError("A secret has no current version.")
+        value = _decrypt_version(db, access, environment, secret, version, dek_cache)
+        inputs.append(
+            BulkSecretInput(key=secret.key, value=value, comment=version.comment[:500])
+        )
+    return inputs
+
+
+def _copy_environment(
+    db: DbSession,
+    principal: Principal,
+    project_id: uuid.UUID,
+    source_environment_id: uuid.UUID,
+    target_environment_id: uuid.UUID,
+    *,
+    write: bool,
+) -> tuple[Environment, list[BulkSecretInput]]:
+    if principal.service_token is not None:
+        raise UnauthorizedError("A user session is required.")
+    source_access, source_environment = _access(
+        db, principal, project_id, source_environment_id
+    )
+    if source_environment.id == target_environment_id:
+        raise InvalidError("Choose a different environment.")
+    _access(
+        db,
+        principal,
+        project_id,
+        target_environment_id,
+        roles={ProjectRole.admin, ProjectRole.editor} if write else None,
+    )
+    return source_environment, _decrypt_environment(db, source_access, source_environment)
+
+
+def preview_copy_secrets(
+    db: DbSession,
+    principal: Principal,
+    project_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    request: CopySecretsRequest,
+    *,
+    context: AuditContext | None = None,
+) -> DiffResult:
+    source_environment, inputs = _copy_environment(
+        db,
+        principal,
+        project_id,
+        request.sourceEnvironmentId,
+        environment_id,
+        write=False,
+    )
+    return diff_secrets(
+        db,
+        principal,
+        project_id,
+        environment_id,
+        DiffRequest(
+            secrets=[
+                DiffSecretInput(
+                    key=item.key,
+                    valueSha256=hashlib.sha256(item.value.encode("utf-8")).hexdigest(),
+                )
+                for item in inputs
+            ]
+        ),
+        context=context,
+        source_environment=source_environment,
+    )
+
+
+def copy_secrets(
+    db: DbSession,
+    principal: Principal,
+    project_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    request: CopySecretsRequest,
+    *,
+    context: AuditContext | None = None,
+) -> BulkUpsertResult:
+    source_environment, inputs = _copy_environment(
+        db,
+        principal,
+        project_id,
+        request.sourceEnvironmentId,
+        environment_id,
+        write=True,
+    )
+    return bulk_upsert(
+        db,
+        principal,
+        project_id,
+        environment_id,
+        BulkUpsertRequest(secrets=inputs, mode=request.mode),
+        context=context,
+        source_environment=source_environment,
+    )
+
+
 def bulk_upsert(
     db: DbSession,
     principal: Principal,
@@ -376,6 +497,7 @@ def bulk_upsert(
     request: BulkUpsertRequest,
     *,
     context: AuditContext | None = None,
+    source_environment: Environment | None = None,
 ) -> BulkUpsertResult:
     access, environment = _access(
         db,
@@ -494,7 +616,12 @@ def bulk_upsert(
         unchanged=len(unchanged_keys),
     )
 
-    if request.mode == "merge" and len(inputs) == 1 and not removed_keys:
+    if (
+        source_environment is None
+        and request.mode == "merge"
+        and len(inputs) == 1
+        and not removed_keys
+    ):
         key = next(iter(inputs))
         if key in created_keys:
             _record(
@@ -537,23 +664,30 @@ def bulk_upsert(
                 context=context,
             )
     else:
+        metadata: dict = {
+            "mode": request.mode,
+            "added": result.added,
+            "updated": result.updated,
+            "removed": result.removed,
+            "unchanged": result.unchanged,
+            "addedKeys": _audit_keys(created_keys),
+            "updatedKeys": _audit_keys(updated_keys),
+            "removedKeys": _audit_keys(removed_keys),
+        }
+        if source_environment is not None:
+            metadata["sourceEnvironment"] = source_environment.slug
         _record(
             db,
             principal,
             access,
             environment,
-            action="secret.bulk_upserted",
+            action=(
+                "secret.copied"
+                if source_environment is not None
+                else "secret.bulk_upserted"
+            ),
             target=f"environment:{environment.slug}",
-            metadata={
-                "mode": request.mode,
-                "added": result.added,
-                "updated": result.updated,
-                "removed": result.removed,
-                "unchanged": result.unchanged,
-                "addedKeys": _audit_keys(created_keys),
-                "updatedKeys": _audit_keys(updated_keys),
-                "removedKeys": _audit_keys(removed_keys),
-            },
+            metadata=metadata,
             context=context,
         )
 

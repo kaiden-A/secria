@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session as DbSession
 
 from ..database import get_db
 from ..dependencies import Principal, require_principal
-from ..rate_limit import DOWNLOAD_LIMIT, REVEAL_LIMIT, limiter
+from ..rate_limit import COPY_LIMIT, DOWNLOAD_LIMIT, REVEAL_LIMIT, limiter
 from ..schemas.secrets import (
     BulkUpsertRequest,
     BulkUpsertResult,
+    CopySecretsRequest,
     DiffRequest,
     DiffResult,
     RollbackRequest,
@@ -105,6 +106,52 @@ def diff_secrets(
     db: DbSession = Depends(get_db),
 ) -> DiffResult:
     return secret_services.diff_secrets(
+        db,
+        principal,
+        project_id,
+        environment_id,
+        request_body,
+        context=_context(request),
+    )
+
+
+@router.post(
+    "/projects/{project_id}/environments/{environment_id}/secrets/copy/preview",
+    response_model=DiffResult,
+)
+@limiter.limit(COPY_LIMIT)
+def preview_copy_secrets(
+    project_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    request_body: CopySecretsRequest,
+    request: Request,
+    principal: Principal = Depends(require_principal),
+    db: DbSession = Depends(get_db),
+) -> DiffResult:
+    return secret_services.preview_copy_secrets(
+        db,
+        principal,
+        project_id,
+        environment_id,
+        request_body,
+        context=_context(request),
+    )
+
+
+@router.post(
+    "/projects/{project_id}/environments/{environment_id}/secrets/copy",
+    response_model=BulkUpsertResult,
+)
+@limiter.limit(COPY_LIMIT)
+def copy_secrets(
+    project_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    request_body: CopySecretsRequest,
+    request: Request,
+    principal: Principal = Depends(require_principal),
+    db: DbSession = Depends(get_db),
+) -> BulkUpsertResult:
+    return secret_services.copy_secrets(
         db,
         principal,
         project_id,
