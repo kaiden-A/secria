@@ -145,7 +145,7 @@ async def rate_limit_error(_request: Request, _exc: RateLimitExceeded) -> JSONRe
 
 @app.get("/", tags=["meta"])
 def root() -> dict[str, str]:
-    return {"name": "Secria API", "version": "0.1.0", "docs": "/docs"}
+    return {"name": "Secria API", "version": "0.1.2", "docs": "/docs"}
 
 
 app.include_router(health_router.router)
