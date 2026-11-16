@@ -83,7 +83,9 @@ uv run --directory server alembic upgrade head
 1. Trigger on pushes to `main` that touch `server/**`.
 2. Build `server/Dockerfile` with context `./server`.
 3. Push `<DOCKERHUB_USERNAME>/<APP_NAME>:<short-sha>` and `:latest`.
-4. Deploy that tag to Cloud Run in `asia-southeast1`.
+4. Deploy that image by its build digest to Cloud Run in `asia-southeast1`.
+   Pinning the digest avoids Cloud Run's Docker Hub mirror lagging behind a
+   freshly pushed tag.
 
 Repository configuration:
 
