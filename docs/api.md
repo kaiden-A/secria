@@ -20,10 +20,15 @@ from one URL. `clientId` is `ZITADEL_CLI_CLIENT_ID` when that is set, otherwise
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET/POST | `/auth/login` | Start Zitadel PKCE login; optional `next`, `login_hint`, `prompt` |
+| GET/POST | `/auth/login` | Start Zitadel PKCE login; optional `next`, `login_hint`, `prompt`. A valid session cookie redirects to `next` without an IdP round trip. |
 | POST | `/auth/signup` | Same flow with `prompt=create` |
 | GET | `/auth/callback` | Exchange the code, verify the ID token, set the session |
 | POST | `/auth/logout` | Delete the local session and return `{logoutUrl}` |
+
+`/auth/login` reuses an existing session: a valid `secria_session` cookie returns
+a 302 to `next` (default `/w`) instead of starting the IdP flow. Explicit
+`prompt` values (`login`, `select_account`, `create`) still go to the IdP, and
+`/auth/signup` always uses `prompt=create`.
 
 The browser uses the HttpOnly `secria_session` cookie. CLI requests use
 `Authorization: Bearer <jwt>`; CI uses `Authorization: Bearer secria_st_...`

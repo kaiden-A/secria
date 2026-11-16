@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-// UX only: the real authorization is always server-side. Keep this cookie name
-// in sync with SECRIA_SESSION_COOKIE_NAME.
-const SESSION_COOKIE = "secria_session";
+import { SESSION_COOKIE } from "@/lib/session-cookie";
 
+// UX only: the real authorization is always server-side.
 const PROTECTED = ["/w", "/settings"];
 
 export function proxy(req: NextRequest) {

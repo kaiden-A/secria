@@ -1,18 +1,33 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { Check, Lock, Shield } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { hasValidSession } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Sign in",
   description: "Sign in to Secria with Elysiaa SSO.",
 };
 
+const LOCAL_ORIGIN = "https://secria.invalid";
+
 function safeNext(value: string | undefined): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/w";
-  return value;
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) {
+    return "/w";
+  }
+  try {
+    const url = new URL(value, LOCAL_ORIGIN);
+    if (url.origin !== LOCAL_ORIGIN) return "/w";
+    // The login page must never send itself back to /login: that either loops
+    // or discards the session check.
+    if (url.pathname === "/login" || url.pathname.startsWith("/login/")) return "/w";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/w";
+  }
 }
 
 const POINTS = [
@@ -29,6 +44,12 @@ export default async function LoginPage({
   const params = await searchParams;
   const next = safeNext(typeof params.next === "string" ? params.next : undefined);
   const error = typeof params.error === "string" ? params.error : null;
+
+  // A valid session means the browser already finished this flow. Drop the
+  // form and IdP round trip instead of asking for the email again.
+  if (await hasValidSession()) {
+    redirect(next);
+  }
 
   return (
     <main className="sc-login">

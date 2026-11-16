@@ -26,9 +26,23 @@ def _start_login(
     request: Request,
     settings: Settings,
     zitadel: ZitadelClient,
+    db: DbSession,
     *,
     default_prompt: str | None = None,
 ) -> RedirectResponse:
+    prompt = (request.query_params.get("prompt") or default_prompt or "").strip().lower()
+
+    # A signed-in browser must not be sent through a second SSO round trip.
+    # Explicit prompts still win: they ask the IdP to show its own UI (re-auth,
+    # account selection, or registration).
+    if prompt not in ALLOWED_PROMPTS:
+        token = request.cookies.get(settings.session_cookie_name)
+        if auth_services.session_user(db, token, settings=settings) is not None:
+            return RedirectResponse(
+                local_path(request.query_params.get("next"), default="/w"),
+                status_code=302,
+            )
+
     verifier, challenge = security.create_pkce_pair()
     state, nonce = security.new_state_nonce()
     payload = {
@@ -39,7 +53,6 @@ def _start_login(
         "iat": int(time.time()),
     }
     login_hint = (request.query_params.get("login_hint") or "").strip()[:320] or None
-    prompt = (request.query_params.get("prompt") or default_prompt or "").strip().lower()
     try:
         authorize_url = zitadel.authorize_url(
             state=state,
@@ -67,32 +80,35 @@ def _start_login(
 @limiter.limit(AUTH_LIMIT)
 def login_get(
     request: Request,
+    db: DbSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
     zitadel: ZitadelClient = Depends(get_zitadel),
 ) -> RedirectResponse:
     """Send the browser to the identity provider."""
-    return _start_login(request, settings, zitadel)
+    return _start_login(request, settings, zitadel, db)
 
 
 @router.post("/login")
 @limiter.limit(AUTH_LIMIT)
 def login_post(
     request: Request,
+    db: DbSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
     zitadel: ZitadelClient = Depends(get_zitadel),
 ) -> RedirectResponse:
-    return _start_login(request, settings, zitadel)
+    return _start_login(request, settings, zitadel, db)
 
 
 @router.post("/signup")
 @limiter.limit(AUTH_LIMIT)
 def signup(
     request: Request,
+    db: DbSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
     zitadel: ZitadelClient = Depends(get_zitadel),
 ) -> RedirectResponse:
     """Registration happens inside the hosted IdP login."""
-    return _start_login(request, settings, zitadel, default_prompt="create")
+    return _start_login(request, settings, zitadel, db, default_prompt="create")
 
 
 @router.get("/callback")

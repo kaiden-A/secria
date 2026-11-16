@@ -38,6 +38,64 @@ def test_signup_requests_the_create_prompt(idp_client, fake_idp) -> None:
     assert fake_idp.authorize_requests[-1]["prompt"] == "create"
 
 
+def test_login_short_circuits_with_a_valid_session(
+    idp_client, fake_idp, sign_in, make_user, db: DbSession
+) -> None:
+    sign_in(make_user(db))
+    before = len(fake_idp.authorize_requests)
+
+    response = idp_client.get("/api/auth/login?next=/w/acme")
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/w/acme"
+    assert len(fake_idp.authorize_requests) == before
+
+
+def test_login_with_an_expired_session_starts_the_idp_flow(
+    idp_client, fake_idp, sign_in, make_user, db: DbSession
+) -> None:
+    token = sign_in(make_user(db))
+    row = db.scalar(select(SessionRow).where(SessionRow.token_hash == security.hash_token(token)))
+    assert row is not None
+    row.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    db.commit()
+    before = len(fake_idp.authorize_requests)
+
+    response = idp_client.get("/api/auth/login?next=/w/acme")
+
+    assert response.status_code == 302
+    assert response.headers["location"].startswith("https://idp.test/authorize")
+    assert len(fake_idp.authorize_requests) == before + 1
+    assert db.scalar(select(SessionRow)) is None
+
+
+def test_prompt_forces_the_idp_even_with_a_valid_session(
+    idp_client, fake_idp, sign_in, make_user, db: DbSession
+) -> None:
+    sign_in(make_user(db))
+    before = len(fake_idp.authorize_requests)
+
+    response = idp_client.get("/api/auth/login?next=/w/acme&prompt=login")
+
+    assert response.status_code == 302
+    assert response.headers["location"].startswith("https://idp.test/authorize")
+    assert len(fake_idp.authorize_requests) == before + 1
+    assert fake_idp.authorize_requests[-1]["prompt"] == "login"
+
+
+def test_signup_with_a_valid_session_still_starts_the_idp_flow(
+    idp_client, fake_idp, sign_in, make_user, db: DbSession
+) -> None:
+    sign_in(make_user(db))
+    before = len(fake_idp.authorize_requests)
+
+    response = idp_client.post("/api/auth/signup")
+
+    assert response.status_code == 302
+    assert len(fake_idp.authorize_requests) == before + 1
+    assert fake_idp.authorize_requests[-1]["prompt"] == "create"
+
+
 def test_callback_creates_user_and_session(idp_client, fake_idp, client, db: DbSession) -> None:
     state = _start_login(idp_client, fake_idp)
 

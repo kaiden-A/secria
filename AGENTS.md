@@ -103,6 +103,9 @@ never commit it. `.env.example` documents every setting.
   cookie.
 - Web sessions are rows in `sessions`; the cookie carries a random token and the
   DB stores its SHA-256. Logout deletes the row.
+- `/login` and `/auth/login` reuse a valid session: the page redirects to `next`
+  (default `/w`) and the endpoint returns a 302 without an IdP round trip.
+  Explicit `prompt` values and `/auth/signup` still go to the IdP.
 - `dependencies.current_principal` resolves a bearer token first, then the
   session cookie. A present but invalid Authorization header must never fall
   back to the cookie.
