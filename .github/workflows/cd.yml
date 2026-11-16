@@ -41,8 +41,8 @@ jobs:
           context: ./server
           push: true
           tags: |
-            ${{ env.DOCKERHUB_IMAGE }}:${{ steps.tag.outputs.IMAGE_TAG }}
-            ${{ env.DOCKERHUB_IMAGE }}:latest
+            docker.io/${{ env.DOCKERHUB_IMAGE }}:${{ steps.tag.outputs.IMAGE_TAG }}
+            docker.io/${{ env.DOCKERHUB_IMAGE }}:latest
 
       # 5. Authenticate to GCP
       - name: Authenticate to Google Cloud
