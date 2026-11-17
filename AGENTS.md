@@ -160,7 +160,9 @@ never commit it. `.env.example` documents every setting.
 
 - Cloud Run `secria` in `asia-southeast1`; image
   `<DOCKERHUB_USERNAME>/secria` from `vars.APP_NAME`. CD is
-  `.github/workflows/cd.yml` on pushes to `main` under `server/**`.
+  `.github/workflows/cd.yml` on pushes to `main` under `server/**`. It deploys
+  the build digest, not the tag, and retries image-pull/rate-limit failures with
+  backoff because Docker Hub's mirror can lag or throttle fresh pushes.
 - Build context is `./server`; the image is the two-stage uv Dockerfile. Run as
   non-root, listen on `0.0.0.0:${PORT}`.
 - Deploys never run migrations. Run `alembic upgrade head` explicitly.

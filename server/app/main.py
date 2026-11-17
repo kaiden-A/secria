@@ -32,6 +32,9 @@ settings = get_settings()
 configure_logging(settings.log_level, settings.environment)
 logger = structlog.get_logger()
 
+# Keep the OpenAPI version and the public root endpoint in lockstep.
+API_VERSION = "0.1.2"
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -42,7 +45,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Secria API",
-    version="0.1.2",
+    version=API_VERSION,
     description="secrets manager API powered by elysiaa.",
     lifespan=lifespan,
 )
@@ -145,7 +148,7 @@ async def rate_limit_error(_request: Request, _exc: RateLimitExceeded) -> JSONRe
 
 @app.get("/", tags=["meta"])
 def root() -> dict[str, str]:
-    return {"name": "Secria API", "version": "0.1.2", "docs": "/docs"}
+    return {"name": "Secria API", "version": API_VERSION, "docs": "/docs"}
 
 
 app.include_router(health_router.router)

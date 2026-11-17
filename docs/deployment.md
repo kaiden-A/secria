@@ -85,7 +85,10 @@ uv run --directory server alembic upgrade head
 3. Push `<DOCKERHUB_USERNAME>/<APP_NAME>:<short-sha>` and `:latest`.
 4. Deploy that image by its build digest to Cloud Run in `asia-southeast1`.
    Pinning the digest avoids Cloud Run's Docker Hub mirror lagging behind a
-   freshly pushed tag.
+   freshly pushed tag. If the image is still unavailable, the deploy retries
+   image-pull and rate-limit failures with 30/60/90/120-second backoff;
+   configuration errors fail immediately.
+5. `workflow_dispatch` allows a manual run from the Actions tab.
 
 Repository configuration:
 

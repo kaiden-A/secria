@@ -6,6 +6,11 @@ on:
       - main
     paths:
       - 'server/**'
+  workflow_dispatch:
+
+concurrency:
+  group: cd-main
+  cancel-in-progress: false
 
 env:
   DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.APP_NAME }}
@@ -16,6 +21,7 @@ jobs:
   deploy:
     name: Build, Push & Deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       # 1. Checkout code
@@ -51,16 +57,52 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # 6. Deploy to Cloud Run
+      # 6. Deploy to Cloud Run. Pin the digest (not the tag) because Docker Hub's
+      # index and Cloud Run's mirror.gcr.io cache can lag behind a fresh push.
+      # Retry only the transient image/rate-limit failures; config errors fail
+      # immediately instead of sleeping through five attempts.
       - name: Deploy to Cloud Run
         id: deploy
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.CLOUD_RUN_SERVICE }}
-          region: ${{ env.GCP_REGION }}
-          # Pin the digest: Cloud Run's Docker Hub mirror can lag behind a
-          # freshly pushed tag even though the digest is already available.
-          image: ${{ env.DOCKERHUB_IMAGE }}@${{ steps.build.outputs.digest }}
+        env:
+          IMAGE: ${{ env.DOCKERHUB_IMAGE }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          delays=(30 60 90 120)
+          attempts=$(( ${#delays[@]} + 1 ))
+
+          for attempt in $(seq 1 "$attempts"); do
+            echo "Deploy attempt ${attempt}/${attempts} — ${IMAGE}"
+
+            if output=$(gcloud run deploy "$CLOUD_RUN_SERVICE" \
+                --image "$IMAGE" \
+                --region "$GCP_REGION" \
+                --update-labels "managed-by=github-actions,commit-sha=${GITHUB_SHA}" \
+                --quiet 2>&1); then
+              printf '%s\n' "$output"
+              url=$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+                --region "$GCP_REGION" --format='value(status.url)')
+              echo "url=${url}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            printf '%s\n' "$output"
+
+            if ! printf '%s\n' "$output" | grep -Eiq \
+              'image .*not found|failed to pull|manifest unknown|toomanyrequests|rate limit|\b429\b'; then
+              echo "Non-retryable deploy failure." >&2
+              exit 1
+            fi
+
+            if [ "$attempt" -lt "$attempts" ]; then
+              delay="${delays[$((attempt - 1))]}"
+              echo "Image not available yet; retrying in ${delay}s..."
+              sleep "$delay"
+            fi
+          done
+
+          echo "Deploy failed after ${attempts} attempts." >&2
+          exit 1
 
       # 7. Print the deployed URL
       - name: Show deployed URL
